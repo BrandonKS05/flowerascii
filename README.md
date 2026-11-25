@@ -1,12 +1,13 @@
 # flowerascii
 
 A bouquet that blooms in ASCII. An empty vase, white sprinkles dripping down on it,
-and seven flowers that grow out of it one after the other, each in its own color and
+and twelve flowers that grow out of it one after the other, each in its own color and
 size, while the whole bouquet turns. Each flower starts as a bud at the mouth of the
-vase and climbs for half a minute on a leafy stem that gets longer while it opens,
-until the bouquet stands three times as high as its vase. The sprinkles never stop.
-Every character is picked from a video frame by `ascii_player.py`; beside the picture
-a fake editor pane scrolls through that file.
+vase and climbs on a leafy stem that gets longer while it opens; the bouquet takes
+half a minute to grow, until it stands three times as high as its vase. The sprinkles
+never stop, and they fall on the vase and the flowers only, not on the black around
+them. Every character is picked from a video frame by `ascii_player.py`; beside the
+picture a fake editor pane scrolls through that file.
 
 ## In the browser
 
@@ -47,12 +48,13 @@ the picture too much, as in a narrow, tall window, the pane goes below it.
 
 The pane shows `Renderer.convert()` and `draw()` without the indentation the two
 share, and those two are written so that no line is longer than a pane of 64 columns
-can hold. A narrower pane folds the lines that do not fit, at a space, and indents
-the rest of each; it never cuts one off.
+can hold. A narrower pane folds the lines that do not fit and indents the rest of
+each where there is room. It folds at a space, and inside a word only when the word
+alone is too long for the pane. From 8 columns up it never cuts a line off.
 The terminal needs 24-bit color. VS Code brightens dim text unless
 `terminal.integrated.minimumContrastRatio` is 1.
 
-Some options: `--once`, `--cols N`, `--flowers N` (1 to 7), `--no-sprinkles`,
+Some options: `--once`, `--cols N`, `--flowers N` (1 to 12), `--no-sprinkles`,
 `--no-vase`, `--vase-color RRGGBB`, `--bg`, `--no-crop`. `--help` lists them all.
 
 Any video of one subject on a black backdrop works in place of `demo_bloom.mp4`.
@@ -68,9 +70,14 @@ video plays for each flower, and `CLIMB` is the share of its opening time a flow
 spends climbing: fast at first, then slower. In each line of `BOUQUET` the second
 number is how far that flower leans out, in degrees, and the third is its size.
 
-`SPRINKLES` is how many specks start to fall each second. They come by a list that is
-as long as one turn of the bouquet and starts again with every turn, so the turn that
-the page repeats for ever shows no jump.
+`SPRINKLES` is how many specks are due each second on a picture 70 characters wide; a
+wider picture gets more in proportion. A speck shows only over the bouquet. It starts
+above the highest drawn character of its column, the share `ABOVE` of the picture's
+height above it, and one whose column is empty is left out. It runs down over drawn
+characters, at most the share `SOAK` of the picture's height of them, and soaks into
+the last with a glint; where the bouquet ends below it, it goes out. The specks come
+by a list that is as long as one turn of the bouquet and starts again with every turn,
+so the turn that the page repeats for ever shows no jump.
 
 ## Recording the show again
 

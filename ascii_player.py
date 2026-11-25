@@ -56,14 +56,19 @@ VASE_COLOR = 0xF0EBE1
 VASE_HEIGHT = 0.33
 VASE_WIDTH = 0.33
 VASE_FOOT = 0.65
-FLOWERS = 7
+FLOWERS = 12
 BOUQUET = ((170.0, 7.0, 0.72, 0.0, 0.0, 1.5, 1.0),
            (20.0, 15.0, 1.00, -115.0, 0.75, 3.6, 1.0),
            (250.0, 24.0, 0.62, -115.0, 0.0, 6.3, 0.80),
            (95.0, 31.0, 0.52, 45.0, 0.0, 9.0, 0.66),
            (310.0, 34.0, 0.47, -55.0, 0.0, 11.4, 0.56),
            (140.0, 22.0, 0.65, -62.0, 0.5, 7.5, 0.90),
-           (205.0, 29.0, 0.55, 88.0, 0.0, 13.5, 0.70))
+           (205.0, 29.0, 0.55, 88.0, 0.0, 13.5, 0.70),
+           (55.0, 27.0, 0.58, 65.0, 0.0, 4.8, 0.85),
+           (285.0, 16.0, 0.78, -30.0, 0.3, 2.6, 1.0),
+           (350.0, 36.0, 0.44, -85.0, 0.0, 10.2, 0.60),
+           (120.0, 38.0, 0.42, -140.0, 0.0, 12.4, 0.50),
+           (225.0, 13.0, 0.60, 0.0, 0.6, 8.2, 0.75))
 STEMS = 0.2
 LONG = 2.4
 STALK = 0.2
@@ -78,7 +83,9 @@ FLUTES = 9
 SPROUT = 1.8
 ENCORE = TURN
 MEMORY = 96
-SPRINKLES = 36.0
+SPRINKLES = 80.0
+ABOVE = 0.05
+SOAK = 0.2
 SPECKS = "'*+."
 TRAIL = ((ord(":"), 0xB4B4B4), (ord("."), 0x858585))
 GLINT = 0.35
@@ -554,12 +561,19 @@ class CodePane:
             hang = min(dent + 4, room // 2)
             starts.append(len(rows))
             at, shift = skip, dent
-            while len(line) - at > room - shift:
-                cut = line.rfind(" ", at + 1, at + room - shift + 1)
-                cut = cut if cut > at else at + room - shift
+            while True:
+                cut = len(line)
+                if cut - at > room - shift:
+                    cut = line.rfind(" ", at + 1, at + room - shift + 1)
+                if cut <= at:
+                    word = line.find(" ", at + 1)
+                    word = len(line) if word < 0 else word
+                    shift = max(min(shift, room - word + at), 0)
+                    cut = min(word, at + room - shift)
                 rows.append((i, at, cut, shift))
                 at, shift = cut + (line[cut:cut + 1] == " "), hang
-            rows.append((i, at, len(line), shift))
+                if at >= len(line):
+                    break
         text = np.full((len(rows), self.GUTTER + room), SPACE, np.uint32)
         color = np.full(text.shape, TEXT, np.uint32)
         color[:, :self.GUTTER] = GUTTER_FG
@@ -572,7 +586,8 @@ class CodePane:
                                             "<u4")
             color[row, span] = self.color[i, at:cut]
         starts = np.array(starts + [len(rows)], np.intp)
-        opens = starts[self.statement[self.first:self.last] - self.first]
+        opens = np.maximum(self.statement[self.first:self.last], self.first)
+        opens = starts[opens - self.first]
         reach = int((starts[1:] - 1 - opens).max(initial=0))
         self.laid[room] = text, color, starts, reach
         return self.laid[room]
@@ -636,18 +651,26 @@ class Sprinkles:
             rng = random.Random(self.seed)
             self.cast = []
             for _ in range(round(SPRINKLES * w / TUNED * self.lap)):
-                speed = rng.uniform(0.35, 0.8)
+                speed = rng.uniform(0.15, 0.4)
                 self.cast.append((rng.random(), rng.randrange(w), -rng.random(),
-                                  h * speed, rng.randrange(3), int(speed * 4.0 - 1.0)))
+                                  h * speed, int(rng.random() * h * SOAK),
+                                  int(speed * 8.0 - 1.0)))
             self.due = np.array([drop[0] for drop in self.cast])
         past = 0.0 if self.then is None else min(max(now - self.then, 0.0), 0.1)
         self.then = now
         self.glint -= past / GLINT
         np.maximum(self.glint, 0.0, out=self.glint)
+        lit, falling = screen.shown != SPACE, []
+        reach = max(round(ABOVE * h), 1)
+        count = np.cumsum(lit, axis=0)
+        ahead = np.vstack((count[reach:], np.repeat(count[-1:], min(reach, h), axis=0)))
+        near = ahead - count + lit > 0
         laps = np.floor(now / self.lap - self.due)
         for i in np.flatnonzero(laps > np.floor((now - past) / self.lap - self.due)):
-            self.drops.append(list(self.cast[i][1:]))
-        lit, falling = screen.shown != SPACE, []
+            drop = list(self.cast[i][1:])
+            if near[:, drop[0]].any():
+                drop[1] += int(near[:, drop[0]].argmax())
+                self.drops.append(drop)
         for drop in self.drops:
             x, y, speed, deep = drop[:4]
             y, above = y + speed * past, int(y // 1)
@@ -657,8 +680,10 @@ class Sprinkles:
                         self.glint[row, x] = 1.0
                         break
                     deep -= 1
+                elif not near[row, x]:
+                    break
             else:
-                if y < h:
+                if y < 0.0 or y < h and near[int(y), x]:
                     drop[1], drop[3] = y, deep
                     falling.append(drop)
         self.drops = falling
@@ -670,7 +695,7 @@ class Sprinkles:
             ink[ys, xs] = r << 16 | g << 8 | b
         for x, y, _, _, trail in self.drops:
             for back, (mark, gray) in enumerate(TRAIL[:trail], 1):
-                if y >= back and glyph[int(y) - back, x] == SPACE:
+                if y >= back and near[int(y) - back, x] and not lit[int(y) - back, x]:
                     glyph[int(y) - back, x], ink[int(y) - back, x] = mark, gray
         for x, y, _, _, _ in self.drops:
             if y >= 0.0:
