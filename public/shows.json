@@ -1,12 +1,12 @@
 [
   {
-    "file": "bloom-wide.bin?v=ad69cef178",
-    "cols": 180,
-    "rows": 55
+    "file": "bloom-wide.bin?v=77eaaabb59",
+    "cols": 161,
+    "rows": 64
   },
   {
-    "file": "bloom-tall.bin?v=33678fe7a4",
-    "cols": 114,
-    "rows": 73
+    "file": "bloom-tall.bin?v=c689817c2c",
+    "cols": 92,
+    "rows": 84
   }
 ]

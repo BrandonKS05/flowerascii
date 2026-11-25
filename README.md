@@ -3,16 +3,18 @@
 A bouquet that blooms in ASCII. An empty vase, white sprinkles dripping down on it,
 and seven flowers that grow out of it one after the other, each in its own color and
 size, while the whole bouquet turns. Each flower starts as a bud at the mouth of the
-vase and climbs on a stem that gets longer while it opens. Every character is picked
-from a video frame by `ascii_player.py`; beside the picture a fake editor pane scrolls
-through that file.
+vase and climbs for half a minute on a leafy stem that gets longer while it opens,
+until the bouquet stands three times as high as its vase. The sprinkles never stop.
+Every character is picked from a video frame by `ascii_player.py`; beside the picture
+a fake editor pane scrolls through that file.
 
 ## In the browser
 
 `public/` is a static page: a plain **Start** button, then two playlist cards. **For
 Michelle** opens the show, with its song playing over it; **Cars** is coming soon and
 does nothing yet. The show is a recording of the terminal player, so the page does no
-video work of its own. After the last flower has opened, the bouquet keeps turning.
+video work of its own. After the last flower has opened, the bouquet keeps turning
+and the sprinkles keep falling.
 
 The song is "I Wanted to Leave" by SYML, in `public/for-michelle.m4a`. The page plays
 that file, or `public/for-michelle.mp3` in its place, and runs silent when neither is
@@ -37,11 +39,16 @@ Vercel serves `public/` as it is (see `vercel.json`); nothing is built there.
 uv run ascii_player.py demo_bloom.mp4
 ```
 
-`q` or Ctrl+C quits. The picture is 110 x 55 characters, and the editor pane is a
-smaller window beside it, up to 64 x 38, so the show wants a wide terminal: 162
-columns or more, and 55 rows. In a smaller one the picture shrinks, and the pane's
-status bar says so where it has room; where the pane beside it would cost the picture
-too much, as in a narrow, tall window, the pane goes below it.
+`q` or Ctrl+C quits. The picture is 92 x 64 characters, higher than it is wide, and
+the editor pane is a smaller window beside it, up to 64 x 45, so the show wants a big
+terminal: 160 columns or more, and 64 rows. In a smaller one the picture shrinks, and
+the pane's status bar says so where it has room; where the pane beside it would cost
+the picture too much, as in a narrow, tall window, the pane goes below it.
+
+The pane shows `Renderer.convert()` and `draw()` without the indentation the two
+share, and those two are written so that no line is longer than a pane of 64 columns
+can hold. A narrower pane folds the lines that do not fit, at a space, and indents
+the rest of each; it never cuts one off.
 The terminal needs 24-bit color. VS Code brightens dim text unless
 `terminal.integrated.minimumContrastRatio` is 1.
 
@@ -50,12 +57,20 @@ Some options: `--once`, `--cols N`, `--flowers N` (1 to 7), `--no-sprinkles`,
 
 Any video of one subject on a black backdrop works in place of `demo_bloom.mp4`.
 
-How tall the bouquet grows is set by three numbers at the top of `ascii_player.py`.
-`STUB` is the stem a flower starts with, as a share of the subject's height. `STEMS`
-says how much of the stem stays inside the vase at the end: none at 0, and the bigger
-the flower, the more of it. `CLIMB` is the share of its opening time a flower spends
-climbing: fast at first, then slower. The second number of each line of `BOUQUET` is
-how far that flower leans out, in degrees.
+How tall the bouquet grows is set by a few numbers at the top of `ascii_player.py`.
+`LONG` is how long a stem gets, in stems of the video's own flower: at 2.4 it is more
+than the video shows, so the picture goes on below the video's lower edge with the
+lowest part of the subject, the share `STALK` of its height, repeated: once upside
+down, once upright, and so on. `STUB` is the stem a flower starts with, as a share of
+the subject's height. `STEMS` says how much of the stem stays inside the vase at the
+end: none at 0, and the bigger the flower, the more of it. `PACE` is how fast the
+video plays for each flower, and `CLIMB` is the share of its opening time a flower
+spends climbing: fast at first, then slower. In each line of `BOUQUET` the second
+number is how far that flower leans out, in degrees, and the third is its size.
+
+`SPRINKLES` is how many specks start to fall each second. They come by a list that is
+as long as one turn of the bouquet and starts again with every turn, so the turn that
+the page repeats for ever shows no jump.
 
 ## Recording the show again
 
@@ -66,15 +81,16 @@ uv run build_web.py
 ```
 
 It runs the same code that draws in the terminal at 20 frames per second, once on a
-screen of 180 x 55 characters and once on one of 114 x 73, and writes down the cells
+screen of 161 x 64 characters and once on one of 92 x 84, and writes down the cells
 that change. It also writes `public/shows.json`, the list the page chooses from: each
 recording's size, and its file name with a stamp of its contents, so that a browser
-never plays an old copy. And it writes `public/cover.json`, the finished bouquet as
-characters and colors, which the page draws on the For Michelle card.
+never plays an old copy. And it writes `public/cover.json`, the finished bouquet
+without the sprinkles, as characters and colors, which the page draws on the For
+Michelle card.
 
-The show ends with the finished bouquet turning once, and the page goes on with that
-turn for ever, so one more record follows the last frame: the cells that take it back
-to the first frame of the turn.
+The show ends with the finished bouquet turning once in the sprinkles, and the page
+goes on with that turn for ever, so one more record follows the last frame: the cells
+that take it back to the first frame of the turn.
 
 A recording is gzip, and the page unpacks it itself. Unpacked, all numbers
 little-endian:

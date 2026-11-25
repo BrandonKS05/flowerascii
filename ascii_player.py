@@ -48,7 +48,7 @@ PANE_COLS = 48
 PANE_WIDE = 64
 PANE_TALL = 0.7
 PANE_SIDE = 0.75
-GRID_COLS = 110
+GRID_COLS = 92
 TUNED = 70
 LIT = 0.15
 CROP_MARGIN = 0.03
@@ -57,18 +57,20 @@ VASE_HEIGHT = 0.33
 VASE_WIDTH = 0.33
 VASE_FOOT = 0.65
 FLOWERS = 7
-BOUQUET = ((170.0, 9.0, 1.10, 0.0, 0.0, 1.0, 1.0),
-           (20.0, 20.0, 1.55, -115.0, 0.75, 2.4, 1.0),
-           (250.0, 32.0, 0.96, -115.0, 0.0, 4.2, 0.80),
-           (95.0, 41.0, 0.80, 45.0, 0.0, 6.0, 0.66),
-           (310.0, 45.0, 0.72, -55.0, 0.0, 7.6, 0.56),
-           (140.0, 29.0, 1.00, -62.0, 0.5, 5.0, 0.90),
-           (205.0, 39.0, 0.84, 88.0, 0.0, 9.0, 0.70))
+BOUQUET = ((170.0, 7.0, 0.72, 0.0, 0.0, 1.5, 1.0),
+           (20.0, 15.0, 1.00, -115.0, 0.75, 3.6, 1.0),
+           (250.0, 24.0, 0.62, -115.0, 0.0, 6.3, 0.80),
+           (95.0, 31.0, 0.52, 45.0, 0.0, 9.0, 0.66),
+           (310.0, 34.0, 0.47, -55.0, 0.0, 11.4, 0.56),
+           (140.0, 22.0, 0.65, -62.0, 0.5, 7.5, 0.90),
+           (205.0, 29.0, 0.55, 88.0, 0.0, 13.5, 0.70))
 STEMS = 0.2
+LONG = 2.4
+STALK = 0.2
 STUB = 0.25
-CLIMB = 0.75
+CLIMB = 0.9
 HEAD = 0.2
-PACE = 0.6
+PACE = 0.35
 TURN = 10.0
 LOOK = 12.0
 DEPTH = 0.12
@@ -329,7 +331,8 @@ class Renderer:
         w, h = fit(wide, self.video_rows)
         top, left = (self.video_rows - h) // 2, (cols - w) // 2
         self.pane_top, self.pane_left = self.video_rows, 0
-        across = min(max(cols - self.want - 4, min(PANE_COLS, cols * 2 // 5)), PANE_WIDE)
+        snug = fit(min(cols, self.want), rows)[0]
+        across = min(max(cols - snug - 4, min(PANE_COLS, cols * 2 // 5)), PANE_WIDE)
         if across >= PANE_SLIM and cols - across - 4 >= 1:
             beside = fit(min(self.want, cols - across - 4), rows)
             if beside[0] * beside[1] >= PANE_SIDE * w * h:
@@ -368,13 +371,17 @@ class Renderer:
 
     def convert(self, frame):
         h, w = self.held.shape[:2]
-        while frame.shape[0] >= 8 * h and frame.shape[1] >= 8 * w:
-            even = frame[:frame.shape[0] & -2, :frame.shape[1] & -2]
+        tall, wide = frame.shape[:2]
+        while tall >= 8 * h and wide >= 8 * w:
+            even = frame[:tall & -2, :wide & -2]
             frame = cv2.resize(even, None, fx=0.5, fy=0.5,
                                interpolation=cv2.INTER_AREA)
-        small = cv2.resize(frame, (w, h), interpolation=cv2.INTER_AREA)
+            tall, wide = frame.shape[:2]
+        small = cv2.resize(frame, (w, h),
+                           interpolation=cv2.INTER_AREA)
         rgb = small[:, :, ::-1].astype(np.float32) / 255.0
-        moved = np.abs(rgb - self.held).max(axis=2) > NOISE_GATE
+        moved = np.abs(rgb - self.held).max(axis=2)
+        moved = moved > NOISE_GATE
         self.held[moved] = rgb[moved]
         rgb = self.held
         peak = rgb.max(axis=2)
@@ -384,16 +391,21 @@ class Renderer:
             self.gain = min(self.gain, max(cap, self.cap))
             self.cap = cap
         light = np.minimum(peak * self.gain, 1.0)
-        value = light + CLARITY * (light - cv2.GaussianBlur(light, (0, 0), 1))
-        fade = np.clip((value - BLACK) / (KNEE - BLACK), 0.0, 1.0)
-        value = np.clip(0.5 + (value - 0.5) * CONTRAST, 0.0, 1.0)
+        soft = cv2.GaussianBlur(light, (0, 0), 1)
+        value = light + CLARITY * (light - soft)
+        fade = (value - BLACK) / (KNEE - BLACK)
+        fade = np.clip(fade, 0.0, 1.0)
+        value = 0.5 + (value - 0.5) * CONTRAST
+        value = np.clip(value, 0.0, 1.0)
         value *= fade * fade * (3.0 - 2.0 * fade)
         luma = rgb @ LUMA
-        tint = luma[..., None] + (rgb - luma[..., None]) * SATURATION
+        gray = luma[..., None]
+        tint = gray + (rgb - gray) * SATURATION
         tint = np.maximum(tint, 0.0)
-        tint /= np.maximum(tint.max(axis=2, keepdims=True), 1e-4)
-        level = np.rint(value ** GLYPH_GAMMA * (len(RAMP) - 1))
-        glyph = GLYPHS[level.astype(np.intp)]
+        top = tint.max(axis=2, keepdims=True)
+        tint /= np.maximum(top, 1e-4)
+        level = value ** GLYPH_GAMMA * (len(RAMP) - 1)
+        glyph = GLYPHS[np.rint(level).astype(np.intp)]
         shade = value ** INK_GAMMA
         gx = cv2.Sobel(light, cv2.CV_32F, 1, 0, scale=0.25)
         gy = cv2.Sobel(light, cv2.CV_32F, 0, 1, scale=0.25)
@@ -402,17 +414,20 @@ class Renderer:
         score = np.stack((flat, lean, -flat, -lean))
         score += EDGE_STICK * power * (WAYS == self.way)
         way = score.argmax(axis=0).astype(np.int8)
-        force = np.sqrt(power) / np.where(self.way < 0, 1.0, EDGE_HOLD)
+        hold = np.where(self.way < 0, 1.0, EDGE_HOLD)
+        force = np.sqrt(power) / hold
         edge = force > self.step
         force[shade * EDGE_INK * 255.0 < FAINT + 8] = 0.0
         force = np.pad(force, 1)
         here = force[1:-1, 1:-1]
-        dy = np.where(way == 2, 0, np.sign(gy)).astype(np.intp)
-        dx = np.where(way == 0, 0, np.sign(gx)).astype(np.intp)
+        dy = np.where(way == 2, 0, np.sign(gy))
+        dx = np.where(way == 0, 0, np.sign(gx))
+        dy, dx = dy.astype(np.intp), dx.astype(np.intp)
         ys, xs = self.at
         edge &= here > force[ys + dy, xs + dx]
         edge &= here * 1.15 >= force[ys - dy, xs - dx]
-        tilt = np.pad(cv2.blur(gy, (3, 1)), ((1, 1), (0, 0)))
+        tilt = cv2.blur(gy, (3, 1))
+        tilt = np.pad(tilt, ((1, 1), (0, 0)))
         turn = (tilt[:-2] - tilt[2:]) * np.sign(gx)
         turn += (1.0 - EDGE_HOLD) * CURVE * here * self.curl
         curl = np.sign(turn) * (np.abs(turn) > CURVE * here)
@@ -422,25 +437,29 @@ class Renderer:
         kind[curl > 0], kind[curl < 0] = 5, 6
         glyph = np.where(edge, STROKES[kind], glyph)
         self.way, self.curl = np.where(edge, way, -1), curl
-        glow = np.minimum(shade * EDGE_INK, cv2.dilate(shade, BESIDE))
+        glow = cv2.dilate(shade, BESIDE)
+        glow = np.minimum(shade * EDGE_INK, glow)
         ink = np.where(edge, glow, shade)[..., None] * tint
         ink = np.rint(ink * 255.0)
         blank = self.shown == SPACE
         glyph[ink.max(axis=2) < FAINT + 8 * blank] = SPACE
-        same = np.abs(ink - self.inked).max(axis=2) <= INK_GATE
-        same &= glyph == self.shown
+        same = np.abs(ink - self.inked).max(axis=2)
+        same = (same <= INK_GATE) & (glyph == self.shown)
         ink[same] = self.inked[same]
         self.inked, self.shown = ink, glyph
         r, g, b = np.moveaxis(ink.astype(np.uint32), 2, 0)
         self.colors = r << 16 | g << 8 | b
-        self.glyph[self.area], self.ink[self.area] = glyph, self.colors
+        self.glyph[self.area] = glyph
+        self.ink[self.area] = self.colors
         if self.backdrop:
             wash = shade * (glyph != SPACE) * BACKDROP
             wash = np.rint(tint * wash[..., None] * 255.0)
-            same = np.abs(wash - self.backed).max(axis=2) <= INK_GATE
+            near = np.abs(wash - self.backed).max(axis=2)
+            same = near <= INK_GATE
             wash[same] = self.backed[same]
             self.backed = wash
-            r, g, b = np.moveaxis(wash.astype(np.uint32), 2, 0)
+            wash = wash.astype(np.uint32)
+            r, g, b = np.moveaxis(wash, 2, 0)
             self.paper[self.area] = r << 16 | g << 8 | b
 
     def draw(self):
@@ -459,32 +478,39 @@ class Renderer:
         ys, xs = ys[odd], xs[odd]
         n = self.redrawn = int(ys.size)
         if n:
-            g, fg, bg = glyph[ys, xs], ink[ys, xs], paper[ys, xs]
+            g, fg = glyph[ys, xs], ink[ys, xs]
+            bg = paper[ys, xs]
             last = np.where(g != SPACE, np.arange(n), 0)
             fg = fg[np.maximum.accumulate(last)]
             jump, inked, papered = np.ones((3, n), bool)
-            jump[1:] = (ys[1:] != ys[:-1]) | (xs[1:] != xs[:-1] + 1)
+            jump[1:] = ys[1:] != ys[:-1]
+            jump[1:] |= xs[1:] != xs[:-1] + 1
             jump[1:] |= g[:-1] > 126
             inked[1:] = fg[1:] != fg[:-1]
             papered[1:] = bg[1:] != bg[:-1]
             cut = np.flatnonzero(jump | inked | papered)
-            text = g.astype("<u4").tobytes().decode("utf-32-le")
+            text = g.astype("<u4").tobytes()
+            text = text.decode("utf-32-le")
             runs = zip(cut.tolist(), cut[1:].tolist() + [n],
                        ys[cut].tolist(), xs[cut].tolist(),
                        fg[cut].tolist(), bg[cut].tolist(),
-                       jump[cut].tolist(), inked[cut].tolist(),
+                       jump[cut].tolist(),
+                       inked[cut].tolist(),
                        papered[cut].tolist())
             add = out.append
-            for a, b, y, x, f, k, move, new_fg, new_bg in runs:
+            for a, b, y, x, f, k, move, fore, back in runs:
                 if move:
                     add(f"\x1b[{y + 1};{x + 1}H")
-                if new_fg:
-                    add(f"\x1b[38;2;{f >> 16};{f >> 8 & 255};{f & 255}m")
-                if new_bg:
-                    add(f"\x1b[48;2;{k >> 16};{k >> 8 & 255};{k & 255}m")
+                if fore:
+                    add("\x1b[38;2;%d;%d;%dm"
+                        % (f >> 16, f >> 8 & 255, f & 255))
+                if back:
+                    add("\x1b[48;2;%d;%d;%dm"
+                        % (k >> 16, k >> 8 & 255, k & 255))
                 add(text[a:b])
         if out:
-            self.term.write("\x1b[?2026h" + "".join(out) + "\x1b[?2026l")
+            out = "".join(out)
+            self.term.write(f"\x1b[?2026h{out}\x1b[?2026l")
         self.seen = glyph.copy(), ink, paper.copy()
 
 
@@ -499,14 +525,10 @@ class CodePane:
             source = "# (source file not found)\n"
         lines = "".join(c if c.isprintable() or c == "\n" else " " for c in source)
         lines = lines.split("\n")[:-1] if lines.endswith("\n") else lines.split("\n")
-        count, width = len(lines), self.GUTTER + max(map(len, lines))
-        self.text = np.full((count, width), SPACE, np.uint32)
-        self.color = np.full((count, width), TEXT, np.uint32)
-        self.color[:, :self.GUTTER] = GUTTER_FG
-        for i, line in enumerate(lines):
-            row = f" {i + 1:>4}  {line}"
-            self.text[i, :len(row)] = np.frombuffer(row.encode("utf-32-le"), "<u4")
-        statements = np.array(highlight(source, self.color[:, self.GUTTER:]), np.intp)
+        count = len(lines)
+        self.lines = lines
+        self.color = np.full((count, max(map(len, lines)) + 1), TEXT, np.uint32)
+        statements = np.array(highlight(source, self.color), np.intp)
         self.first = Renderer.convert.__code__.co_firstlineno - 1
         self.draw_at = Renderer.draw.__code__.co_firstlineno - 1
         if 0 <= self.first < self.draw_at < count:
@@ -516,8 +538,44 @@ class CodePane:
         marks = np.zeros(count, np.intp)
         marks[statements] = statements
         self.statement = np.maximum.accumulate(marks)
-        reach = np.arange(count) - self.statement
-        self.reach = int(reach[self.first:self.last].max())
+        margins = [len(line) - len(line.lstrip())
+                   for line in lines[self.first:self.last] if line.strip()]
+        self.margin = min(margins, default=0)
+        self.laid = {}
+
+    def lay(self, room):
+        if room in self.laid:
+            return self.laid[room]
+        rows, starts = [], []
+        for i in range(self.first, self.last):
+            line = self.lines[i]
+            skip = len(line) - len(line.lstrip())
+            dent = min(max(skip - self.margin, 0), room // 2)
+            hang = min(dent + 4, room // 2)
+            starts.append(len(rows))
+            at, shift = skip, dent
+            while len(line) - at > room - shift:
+                cut = line.rfind(" ", at + 1, at + room - shift + 1)
+                cut = cut if cut > at else at + room - shift
+                rows.append((i, at, cut, shift))
+                at, shift = cut + (line[cut:cut + 1] == " "), hang
+            rows.append((i, at, len(line), shift))
+        text = np.full((len(rows), self.GUTTER + room), SPACE, np.uint32)
+        color = np.full(text.shape, TEXT, np.uint32)
+        color[:, :self.GUTTER] = GUTTER_FG
+        for row in starts:
+            number = f" {rows[row][0] + 1:>4}"
+            text[row, :len(number)] = np.frombuffer(number.encode("utf-32-le"), "<u4")
+        for row, (i, at, cut, shift) in enumerate(rows):
+            span = slice(self.GUTTER + shift, self.GUTTER + shift + cut - at)
+            text[row, span] = np.frombuffer(self.lines[i][at:cut].encode("utf-32-le"),
+                                            "<u4")
+            color[row, span] = self.color[i, at:cut]
+        starts = np.array(starts + [len(rows)], np.intp)
+        opens = starts[self.statement[self.first:self.last] - self.first]
+        reach = int((starts[1:] - 1 - opens).max(initial=0))
+        self.laid[room] = text, color, starts, reach
+        return self.laid[room]
 
     def paint(self, screen, now, info):
         top, left = screen.pane_top, screen.pane_left
@@ -534,21 +592,23 @@ class CodePane:
         if start >= 9:
             for i, light in enumerate(LIGHTS):
                 screen.put(top, left + 2 + 2 * i, "●", light)
+        text, color, starts, reach = self.lay(max(cols - self.GUTTER - 1, 1))
         body = rows - 1 - (rows > 4)
         head = self.first + int(now * SCROLL_SPEED) % (self.last - self.first)
         current = max(int(self.statement[head]), self.first)
-        lead = min(max(body // 3, self.reach), max(body - 1, 0))
-        view = min(max(head - lead, self.first), max(self.last - body, self.first))
-        view = min(view, current)
-        shown = max(min(body, self.last - view), 0)
-        width = min(cols, self.text.shape[1])
-        glyph[1:1 + shown, :width] = self.text[view:view + shown, :width]
-        ink[1:1 + shown, :width] = self.color[view:view + shown, :width]
-        if view <= current < view + shown:
-            row = 1 + current - view
-            paper[row] = LINE_BG
-            ink[row, :self.GUTTER] = MARK
-            screen.put(top + row, left, "▎", MARK)
+        mark, below = starts[current - self.first], starts[current - self.first + 1]
+        foot = starts[head - self.first + 1] - 1
+        lead = min(max(body // 3, reach), max(body - 1, 0))
+        view = min(max(foot - lead, 0), max(len(text) - body, 0))
+        view = min(view, mark)
+        shown = max(min(body, len(text) - view), 0)
+        width = min(cols, text.shape[1])
+        glyph[1:1 + shown, :width] = text[view:view + shown, :width]
+        ink[1:1 + shown, :width] = color[view:view + shown, :width]
+        for row in range(max(mark, view), min(below, view + shown)):
+            paper[1 + row - view] = LINE_BG
+            ink[1 + row - view, :self.GUTTER] = MARK
+            screen.put(top + 1 + row - view, left, "▎", MARK)
         if rows > 4:
             method = "convert" if head < self.draw_at else "draw"
             status = f"  Renderer.{method}()  Ln {current + 1}"
@@ -563,26 +623,30 @@ class CodePane:
 
 class Sprinkles:
     def __init__(self, seed=7):
-        self.rng = random.Random(seed)
-        self.size, self.then, self.owed, self.drops = None, None, 0.0, []
+        self.seed, self.lap = seed, TURN or 10.0
+        self.size, self.then, self.drops = None, None, []
 
-    def fall(self, screen, now, wet):
+    def fall(self, screen, now):
         glyph, ink = screen.glyph[screen.area], screen.ink[screen.area]
         glyph[:], ink[:] = screen.shown, screen.colors
         h, w = glyph.shape
         if self.size != (h, w):
             self.size, self.drops = (h, w), []
             self.glint = np.zeros((h, w), np.float32)
+            rng = random.Random(self.seed)
+            self.cast = []
+            for _ in range(round(SPRINKLES * w / TUNED * self.lap)):
+                speed = rng.uniform(0.35, 0.8)
+                self.cast.append((rng.random(), rng.randrange(w), -rng.random(),
+                                  h * speed, rng.randrange(3), int(speed * 4.0 - 1.0)))
+            self.due = np.array([drop[0] for drop in self.cast])
         past = 0.0 if self.then is None else min(max(now - self.then, 0.0), 0.1)
         self.then = now
         self.glint -= past / GLINT
         np.maximum(self.glint, 0.0, out=self.glint)
-        self.owed += wet * SPRINKLES * w / TUNED * past
-        while self.owed >= 1.0:
-            self.owed -= 1.0
-            speed = self.rng.uniform(0.35, 0.8)
-            self.drops.append([self.rng.randrange(w), -self.rng.random(), h * speed,
-                               self.rng.randrange(3), int(speed * 4.0 - 1.0)])
+        laps = np.floor(now / self.lap - self.due)
+        for i in np.flatnonzero(laps > np.floor((now - past) / self.lap - self.due)):
+            self.drops.append(list(self.cast[i][1:]))
         lit, falling = screen.shown != SPACE, []
         for drop in self.drops:
             x, y, speed, deep = drop[:4]
@@ -683,6 +747,14 @@ def survey(path, samples=4):
     return white, lit if lit.any() else None, stem
 
 
+def lengthen(film, rows, more):
+    stalk = film[-max(rows, 1):]
+    if more < 1 or not len(stalk):
+        return film
+    turns = -(-more // (2 * len(stalk)))
+    return np.vstack((film,) + (stalk[::-1], stalk) * turns)[:len(film) + more]
+
+
 def hue_turn(degrees):
     cos, sin = np.cos(np.radians(degrees)), np.sin(np.radians(degrees)) / 3.0 ** 0.5
     turn = cos * np.eye(3) + (1.0 - cos) / 3.0
@@ -748,22 +820,22 @@ class Stage:
             picks = BOUQUET[:flowers] if flowers > 1 else ((0.0, 0.0, 1.0, 0.0, 0.0) +
                                                            BOUQUET[0][5:],)
             self.blooms = [Flower(*pick, length) for pick in picks]
+            tall = (self.mouth[1] - self.head[1]) * (LONG if flowers > 1 else 1.0)
             for flower in self.blooms:
-                flower.stem = self.mouth[1] - self.head[1] - flower.cut * high * (flowers > 1)
+                flower.stem = tall - flower.cut * high * (flowers > 1)
                 flower.stub = min(STUB * high, flower.stem)
                 opening = min(flower.last, length) / self.pace if length else 5.0
                 flower.climb = max(CLIMB * opening, flower.sprout)
+            self.deep = int(np.ceil(self.head[1] + tall))
             self.gaps = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                   (wide // 16 | 1, wide // 16 | 1))
             waits = [flower.wait for flower in self.blooms]
             self.lead, late = min(waits), max(waits)
-            grown = max(flower.wait + flower.sprout for flower in self.blooms)
+            grown = max(flower.wait + flower.climb for flower in self.blooms)
             over = max(flower.wait + min(flower.last, length) / self.pace
                        for flower in self.blooms)
-            over = max(over, grown) if length else grown + 5.0
-            self.tail = max(over - length / self.pace if length else late, self.lead)
-            self.tail += ENCORE - self.lead
-            self.rain = grown, max(over - 3.0, grown + 1.0)
+            over = max(over, grown)
+            self.tail = max(over - length / self.pace, self.lead) + ENCORE - self.lead
             self.reel = collections.deque(maxlen=MEMORY)
             self.every = (late - self.lead) * self.pace / (MEMORY - 2)
             self.fed = self.fresh = None
@@ -807,10 +879,14 @@ class Stage:
             return box
         fine = np.array([lit.shape[1] / self.wide, lit.shape[0] / self.high])
         room = np.zeros((3 * lit.shape[0], 3 * lit.shape[1]), np.uint8)
+        top, foot = self.subject[1], self.subject[3]
+        long = lengthen(lit[:round(foot * fine[1])].astype(np.uint8) * 255,
+                        round(STALK * (foot - top) * fine[1]),
+                        round((self.deep - foot) * fine[1]))
         for flower in self.blooms:
             for turn in np.arange(16) * np.pi / 8 if flower.tilt and TURN else (0.0,):
                 place, _, cut = self.place(flower, 1.0, turn)
-                here = lit.astype(np.uint8) * 255
+                here = long.copy()
                 here[round(cut * fine[1]):] = 0
                 lay = place[:, :2] * fine[:, None] / fine[None, :]
                 move = place[:, 2] * fine + lit.shape[::-1]
@@ -850,12 +926,6 @@ class Stage:
         self.box = join(self.box, self.framed(seen))
         return True
 
-    def wet(self, now):
-        if not self.blooms:
-            return 0.0
-        grown, dry = self.rain
-        return min(max((dry - now) / (dry - grown), 0.0), 1.0)
-
     def take(self, frame, seen):
         if self.shrink > 1:
             frame = cv2.resize(frame, (self.wide, self.high),
@@ -864,6 +934,7 @@ class Stage:
         film = np.ascontiguousarray(frame[sy0:sy1, sx0:sx1])
         if not film.size:
             return None
+        film = lengthen(film, round(STALK * (sy1 - sy0)), self.deep - sy1)
         blue, green, red = cv2.split(film)
         other = cv2.max(blue, red)
         peak = cv2.max(other, green)
@@ -1059,7 +1130,7 @@ def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_C
             if wake == due or resized:
                 screen.convert(stage.cut(shown, at))
             if rain:
-                rain.fall(screen, wake - began, stage.wet(at))
+                rain.fall(screen, wake - began)
             pane.paint(screen, wake - began, info)
             term.nap(wake)
             screen.draw()

@@ -16,7 +16,7 @@ import numpy as np
 import ascii_player as player
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SHOWS = (("bloom-wide.bin", 180, 55), ("bloom-tall.bin", 114, 73))
+SHOWS = (("bloom-wide.bin", 161, 64), ("bloom-tall.bin", 92, 84))
 
 
 class Page:
@@ -62,7 +62,7 @@ def record(path, cols, rows, fps):
         at = index / fps
         screen.convert(stage.cut(frame, at))
         if rain:
-            rain.fall(screen, at, stage.wet(at))
+            rain.fall(screen, at)
         info = [name, f"{fps:.4g} fps", player.clock(at) + length, count]
         info += screen.note
         pane.paint(screen, at, info)
@@ -70,7 +70,8 @@ def record(path, cols, rows, fps):
         if index % max(round(fps / 4), 1) == 0:
             count = f"{screen.redrawn:4d} cells redrawn"
         ink = np.where(screen.glyph == player.SPACE, 0, screen.ink)
-        yield screen.glyph.copy(), ink, screen.paper.copy(), screen.area
+        bare = screen.shown, np.where(screen.shown == player.SPACE, 0, screen.colors)
+        yield screen.glyph.copy(), ink, screen.paper.copy(), bare
         ok, following = video.read()
         if ok and following is not frame and stage.fit(following):
             screen.layout(cols, rows, *stage.shape)
@@ -99,13 +100,16 @@ def pack(path, cols, rows, fps):
                 + index(glyph, glyphs).tobytes() + ink.astype("<u2").tobytes()
                 + index(paper, papers).tobytes())
 
+    def coarse(ink):
+        r, g, b = (((ink >> shift & 255) * 15 + 127) // 255 for shift in (16, 8, 0))
+        return r << 8 | g << 4 | b
+
     states = [(np.full((rows, cols), player.SPACE, np.uint32),
                np.zeros((rows, cols), np.uint32),
                np.zeros((rows, cols), np.uint32))]
-    area = np.s_[:0, :0]
-    for *now, area in show:
-        r, g, b = (((now[1] >> shift & 255) * 15 + 127) // 255 for shift in (16, 8, 0))
-        now = now[0], r << 8 | g << 4 | b, now[2]
+    bare = np.full((0, 0), player.SPACE, np.uint32), np.zeros((0, 0), np.uint32)
+    for *now, bare in show:
+        now = now[0], coarse(now[1]), now[2]
         frames.append(change(states[-1], now))
         changed += struct.unpack_from("<H", frames[-1])[0]
         states = states[-turn:] + [now]
@@ -124,7 +128,7 @@ def pack(path, cols, rows, fps):
             f"{(count - loop) / fps:.1f} s go round for ever) on {cols}x{rows} cells, "
             f"{changed / max(count, 1):.0f} cells changed per frame, "
             f"{len(data) / 1e6:.2f} MB -> {len(packed) / 1e3:.0f} kB gzip")
-    glyph, ink = states[-1][0][area], states[-1][1][area]
+    glyph, ink = bare[0], coarse(bare[1])
     lit = np.argwhere(glyph != player.SPACE)
     if lit.size:
         (top, left), (bottom, right) = lit.min(axis=0), lit.max(axis=0) + 1
