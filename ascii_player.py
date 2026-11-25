@@ -68,7 +68,7 @@ BOUQUET = ((170.0, 7.0, 0.72, 0.0, 0.0, 1.5, 1.0),
            (285.0, 16.0, 0.78, -30.0, 0.3, 2.6, 1.0),
            (350.0, 36.0, 0.44, -85.0, 0.0, 10.2, 0.60),
            (120.0, 38.0, 0.42, -140.0, 0.0, 12.4, 0.50),
-           (225.0, 13.0, 0.60, 0.0, 0.6, 8.2, 0.75))
+           (330.0, 26.0, 0.60, 0.0, 0.6, 8.2, 0.75))
 STEMS = 0.2
 LONG = 2.4
 STALK = 0.2
@@ -83,7 +83,7 @@ FLUTES = 9
 SPROUT = 1.8
 ENCORE = TURN
 MEMORY = 96
-SPRINKLES = 80.0
+SPRINKLES = 60.0
 ABOVE = 0.05
 SOAK = 0.2
 SPECKS = "'*+."
@@ -652,7 +652,7 @@ class Sprinkles:
             self.cast = []
             for _ in range(round(SPRINKLES * w / TUNED * self.lap)):
                 speed = rng.uniform(0.15, 0.4)
-                self.cast.append((rng.random(), rng.randrange(w), -rng.random(),
+                self.cast.append((rng.random(), rng.randrange(w), rng.random(),
                                   h * speed, int(rng.random() * h * SOAK),
                                   int(speed * 8.0 - 1.0)))
             self.due = np.array([drop[0] for drop in self.cast])
@@ -852,6 +852,7 @@ class Stage:
                 opening = min(flower.last, length) / self.pace if length else 5.0
                 flower.climb = max(CLIMB * opening, flower.sprout)
             self.deep = int(np.ceil(self.head[1] + tall))
+            self.stalk = STALK * high
             self.gaps = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                   (wide // 16 | 1, wide // 16 | 1))
             waits = [flower.wait for flower in self.blooms]
@@ -904,9 +905,9 @@ class Stage:
             return box
         fine = np.array([lit.shape[1] / self.wide, lit.shape[0] / self.high])
         room = np.zeros((3 * lit.shape[0], 3 * lit.shape[1]), np.uint8)
-        top, foot = self.subject[1], self.subject[3]
+        foot = min(self.subject[3], round(self.mouth[1]))
         long = lengthen(lit[:round(foot * fine[1])].astype(np.uint8) * 255,
-                        round(STALK * (foot - top) * fine[1]),
+                        round(self.stalk * fine[1]),
                         round((self.deep - foot) * fine[1]))
         for flower in self.blooms:
             for turn in np.arange(16) * np.pi / 8 if flower.tilt and TURN else (0.0,):
@@ -956,10 +957,16 @@ class Stage:
             frame = cv2.resize(frame, (self.wide, self.high),
                                interpolation=cv2.INTER_AREA)
         sx0, sy0, sx1, sy1 = self.subject
-        film = np.ascontiguousarray(frame[sy0:sy1, sx0:sx1])
+        film = frame[sy0:sy1, sx0:sx1]
         if not film.size:
             return None
-        film = lengthen(film, round(STALK * (sy1 - sy0)), self.deep - sy1)
+        lit = film.max(axis=(1, 2)) > self.level
+        foot = max(min(sy1, round(self.mouth[1])) - sy0, 1)
+        rows = np.flatnonzero(lit[:foot])
+        foot = int(rows[-1]) + 1 if rows.size else foot
+        dark = np.flatnonzero(~lit[foot:])
+        film = np.ascontiguousarray(film[:foot + int(dark[0])] if dark.size else film)
+        film = lengthen(film, round(self.stalk), self.deep - sy0 - len(film))
         blue, green, red = cv2.split(film)
         other = cv2.max(blue, red)
         peak = cv2.max(other, green)

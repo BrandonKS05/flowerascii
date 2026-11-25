@@ -5,9 +5,9 @@ and twelve flowers that grow out of it one after the other, each in its own colo
 size, while the whole bouquet turns. Each flower starts as a bud at the mouth of the
 vase and climbs on a leafy stem that gets longer while it opens; the bouquet takes
 half a minute to grow, until it stands three times as high as its vase. The sprinkles
-never stop, and they fall on the vase and the flowers only, not on the black around
-them. Every character is picked from a video frame by `ascii_player.py`; beside the
-picture a fake editor pane scrolls through that file.
+never stop, and they show only on the bouquet and just above it, not all over the
+black around it. Every character is picked from a video frame by `ascii_player.py`;
+beside the picture a fake editor pane scrolls through that file.
 
 ## In the browser
 
@@ -48,9 +48,11 @@ the picture too much, as in a narrow, tall window, the pane goes below it.
 
 The pane shows `Renderer.convert()` and `draw()` without the indentation the two
 share, and those two are written so that no line is longer than a pane of 64 columns
-can hold. A narrower pane folds the lines that do not fit and indents the rest of
-each where there is room. It folds at a space, and inside a word only when the word
-alone is too long for the pane. From 8 columns up it never cuts a line off.
+can hold. A narrower pane indents no row by more than half its width, and it moves a
+word that does not fit behind its indentation to the left. It folds the lines that
+still do not fit and indents the rest of each where there is room. It folds at a
+space, and inside a word only when the word alone is too long for the pane. From 8
+columns up it never cuts a line off.
 The terminal needs 24-bit color. VS Code brightens dim text unless
 `terminal.integrated.minimumContrastRatio` is 1.
 
@@ -61,14 +63,15 @@ Any video of one subject on a black backdrop works in place of `demo_bloom.mp4`.
 
 How tall the bouquet grows is set by a few numbers at the top of `ascii_player.py`.
 `LONG` is how long a stem gets, in stems of the video's own flower: at 2.4 it is more
-than the video shows, so the picture goes on below the video's lower edge with the
-lowest part of the subject, the share `STALK` of its height, repeated: once upside
-down, once upright, and so on. `STUB` is the stem a flower starts with, as a share of
-the subject's height. `STEMS` says how much of the stem stays inside the vase at the
-end: none at 0, and the bigger the flower, the more of it. `PACE` is how fast the
-video plays for each flower, and `CLIMB` is the share of its opening time a flower
-spends climbing: fast at first, then slower. In each line of `BOUQUET` the second
-number is how far that flower leans out, in degrees, and the third is its size.
+than the video shows, so the picture goes on below the end of the video's stem with
+the lowest part of that stem, the share `STALK` of the subject's height, repeated:
+once upside down, once upright, and so on. `STUB` is the stem a flower starts with,
+as a share of the subject's height. `STEMS` says how much of the stem stays inside
+the vase at the end: none at 0, and the bigger the flower, the more of it. `PACE` is
+how fast the video plays for each flower, and `CLIMB` is the share of its opening
+time a flower spends climbing: fast at first, then slower. In each line of `BOUQUET`
+the second number is how far that flower leans out, in degrees, and the third is its
+size.
 
 `SPRINKLES` is how many specks are due each second on a picture 70 characters wide; a
 wider picture gets more in proportion. A speck shows only over the bouquet. It starts
