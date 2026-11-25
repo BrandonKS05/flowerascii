@@ -14,9 +14,9 @@ Michelle** opens the show, with its song playing over it; **Cars** is coming soo
 does nothing yet. The show is a recording of the terminal player, so the page does no
 video work of its own. After the last flower has opened, the bouquet keeps turning.
 
-The song is "I Wanted to Leave" by SYML. Its audio file is not in this repository:
-the page plays `public/for-michelle.mp3` (or `for-michelle.m4a`) when such a file is
-there, and runs silent when it is not.
+The song is "I Wanted to Leave" by SYML, in `public/for-michelle.m4a`. The page plays
+that file, or `public/for-michelle.mp3` in its place, and runs silent when neither is
+there.
 
 There are two recordings, and the page takes the one that shows bigger characters in
 its window: `bloom-wide.bin` with the editor pane beside the picture, for a window
