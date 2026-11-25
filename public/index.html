@@ -74,7 +74,7 @@
     transition: filter .15s ease;
   }
   .card .name { font-size: 14px; line-height: 1.4; }
-  .card .note { font-size: 12px; line-height: 1.45; color: var(--quiet); }
+  .card .note { min-height: 1.45em; font-size: 12px; line-height: 1.45; color: var(--quiet); }
   #michelle:hover .cover, #michelle:focus-visible .cover { filter: grayscale(1) brightness(.5); }
   #michelle:disabled { cursor: progress; }
   .soon { color: var(--quiet); cursor: default; }
@@ -108,7 +108,7 @@
     <button id="michelle" class="card" type="button">
       <span class="cover"><canvas id="art" aria-hidden="true"></canvas></span>
       <span class="name">For Michelle</span>
-      <span class="note" id="note">I Wanted to Leave by SYML</span>
+      <span class="note" id="note"></span>
     </button>
     <div class="card soon">
       <span class="cover"></span>
