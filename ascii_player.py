@@ -40,9 +40,14 @@ TITLE = "ascii_player.py — Renderer.convert() + draw()"
 
 RAMP = " .:;+*{1oa%&8B@"
 
-VIDEO_SHARE = 0.65
-PANE_ROWS = 8
+VIDEO_SHARE = 0.58
+PANE_ROWS = 12
+PANE_HIGH = 18
+PANE_SLIM = 30
 PANE_COLS = 48
+PANE_WIDE = 64
+PANE_TALL = 0.7
+PANE_SIDE = 0.75
 GRID_COLS = 110
 TUNED = 70
 LIT = 0.15
@@ -52,14 +57,16 @@ VASE_HEIGHT = 0.33
 VASE_WIDTH = 0.33
 VASE_FOOT = 0.65
 FLOWERS = 7
-BOUQUET = ((170.0, 12.0, 1.10, 0.0, 0.0, 1.0, 1.0),
-           (20.0, 27.0, 1.55, -115.0, 0.75, 2.4, 1.0),
-           (250.0, 42.0, 0.96, -115.0, 0.0, 4.2, 0.80),
-           (95.0, 55.0, 0.80, 45.0, 0.0, 6.0, 0.66),
-           (310.0, 60.0, 0.72, -55.0, 0.0, 7.6, 0.56),
-           (140.0, 38.0, 1.00, -62.0, 0.5, 5.0, 0.90),
-           (205.0, 52.0, 0.84, 88.0, 0.0, 9.0, 0.70))
-STEMS = 0.44
+BOUQUET = ((170.0, 9.0, 1.10, 0.0, 0.0, 1.0, 1.0),
+           (20.0, 20.0, 1.55, -115.0, 0.75, 2.4, 1.0),
+           (250.0, 32.0, 0.96, -115.0, 0.0, 4.2, 0.80),
+           (95.0, 41.0, 0.80, 45.0, 0.0, 6.0, 0.66),
+           (310.0, 45.0, 0.72, -55.0, 0.0, 7.6, 0.56),
+           (140.0, 29.0, 1.00, -62.0, 0.5, 5.0, 0.90),
+           (205.0, 39.0, 0.84, 88.0, 0.0, 9.0, 0.70))
+STEMS = 0.2
+STUB = 0.25
+CLIMB = 0.75
 HEAD = 0.2
 PACE = 0.6
 TURN = 10.0
@@ -317,14 +324,20 @@ class Renderer:
         wide = min(cols, self.want)
         need = min(round(wide * tall), rows - PANE_ROWS)
         self.video_rows = max(1, min(rows, max(round(rows * VIDEO_SHARE), need)))
+        self.pane_rows, self.pane_cols = min(rows - self.video_rows, PANE_HIGH), cols
+        self.video_rows = rows - self.pane_rows
         w, h = fit(wide, self.video_rows)
         top, left = (self.video_rows - h) // 2, (cols - w) // 2
         self.pane_top, self.pane_left = self.video_rows, 0
-        if cols - PANE_COLS - 4 >= 1:
-            beside = fit(min(self.want, cols - PANE_COLS - 4), rows)
-            if beside[0] * beside[1] > 1.2 * w * h:
-                (w, h), left, self.video_rows = beside, 2, rows
-                top, self.pane_top, self.pane_left = (rows - h) // 2, 0, w + 4
+        across = min(max(cols - self.want - 4, min(PANE_COLS, cols * 2 // 5)), PANE_WIDE)
+        if across >= PANE_SLIM and cols - across - 4 >= 1:
+            beside = fit(min(self.want, cols - across - 4), rows)
+            if beside[0] * beside[1] >= PANE_SIDE * w * h:
+                (w, h), self.video_rows = beside, rows
+                top, left = (rows - h) // 2, (cols - w - 3 - across) // 2
+                self.pane_cols = across
+                self.pane_rows = min(rows, max(PANE_ROWS, round(PANE_TALL * h)))
+                self.pane_top, self.pane_left = (rows - self.pane_rows) // 2, left + w + 3
         self.area = np.s_[top:top + h, left:left + w]
         self.note = []
         if w < 0.8 * self.want:
@@ -508,15 +521,16 @@ class CodePane:
 
     def paint(self, screen, now, info):
         top, left = screen.pane_top, screen.pane_left
-        rows, cols = screen.rows - top, screen.cols - left
+        rows, cols = screen.pane_rows, screen.pane_cols
         if rows < 1 or cols < 1:
             return
-        glyph, ink, paper = (grid[top:, left:]
+        glyph, ink, paper = (grid[top:top + rows, left:left + cols]
                              for grid in (screen.glyph, screen.ink, screen.paper))
         glyph[:], ink[:], paper[:] = SPACE, TEXT, PANE_BG
         paper[0] = BAR_BG
-        start = max((cols - len(TITLE)) // 2, 0)
-        screen.put(top, left + start, TITLE, BAR_FG)
+        title = TITLE if cols >= len(TITLE) + 18 else TITLE.split(" — ")[0]
+        start = max((cols - len(title)) // 2, 0)
+        screen.put(top, left + start, title[:cols - start], BAR_FG)
         if start >= 9:
             for i, light in enumerate(LIGHTS):
                 screen.put(top, left + 2 + 2 * i, "●", light)
@@ -539,7 +553,7 @@ class CodePane:
             method = "convert" if head < self.draw_at else "draw"
             status = f"  Renderer.{method}()  Ln {current + 1}"
             paper[rows - 1] = BAR_BG
-            screen.put(top + rows - 1, left, status, BAR_FG)
+            screen.put(top + rows - 1, left, status[:cols], BAR_FG)
             room = cols - len(f"  Renderer.convert()  Ln {self.last}") - 4
             while info and len("  ".join(info)) > room:
                 info = info[1:]
@@ -736,6 +750,9 @@ class Stage:
             self.blooms = [Flower(*pick, length) for pick in picks]
             for flower in self.blooms:
                 flower.stem = self.mouth[1] - self.head[1] - flower.cut * high * (flowers > 1)
+                flower.stub = min(STUB * high, flower.stem)
+                opening = min(flower.last, length) / self.pace if length else 5.0
+                flower.climb = max(CLIMB * opening, flower.sprout)
             self.gaps = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
                                                   (wide // 16 | 1, wide // 16 | 1))
             waits = [flower.wait for flower in self.blooms]
@@ -768,7 +785,7 @@ class Stage:
         return (int(box[0] * self.wide), int(box[1] * self.high),
                 round(box[2] * self.wide), round(box[3] * self.high))
 
-    def place(self, flower, grown=1.0, turn=0.0):
+    def place(self, flower, grown=1.0, turn=0.0, risen=1.0):
         tilt = flower.tilt * (0.5 + 0.5 * grown)
         x = np.sin(tilt) * np.sin(flower.around + turn)
         near = np.sin(tilt) * np.cos(flower.around + turn)
@@ -778,10 +795,11 @@ class Stage:
         lay = size / seems * np.array([[up, -x], [x, up]])
         if flower.flip:
             lay[:, 0] *= -1.0
-        root = self.head + (0.0, flower.stem * seems)
+        stem = flower.stub + (flower.stem - flower.stub) * risen
+        root = self.head + (0.0, stem * seems)
         to = self.mouth + (0.1 * self.span * x, 0.0)
         place = np.hstack((lay, (to - lay @ root)[:, None]))
-        return place, near * flower.stem * flower.size * grown, root[1]
+        return place, near * stem * flower.size * grown, root[1]
 
     def reach(self, lit):
         box = self.pixels(lit_box(lit, 0))
@@ -885,8 +903,8 @@ class Stage:
         flower.kept = frame, tinted
         return tinted
 
-    def paint(self, flower, frame, grown, turn):
-        place, near, cut = self.place(flower, grown, turn)
+    def paint(self, flower, frame, grown, turn, risen):
+        place, near, cut = self.place(flower, grown, turn, risen)
         (sx0, sy0), cover = frame[1], frame[3]
         rows = min(max(round(cut) - sy0, 0), cover.shape[0])
         ends = np.array([(x, y, 1) for y in (sy0, sy0 + rows)
@@ -928,7 +946,8 @@ class Stage:
             shown = self.find(flower, min(age * self.pace, flower.last))
             grown = min(age / flower.sprout, 1.0)
             grown *= grown * (3.0 - 2.0 * grown)
-            layer = self.paint(flower, shown, grown, turn)
+            risen = min(age / flower.climb, 1.0)
+            layer = self.paint(flower, shown, grown, turn, risen * (2.0 - risen))
             if layer:
                 layers.append(layer)
         if self.vase:
@@ -1036,7 +1055,7 @@ def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_C
                     break
                 shown, at = frame, index / fps
                 info = [name, f"{fps:.4g} fps", clock(at) + length, count]
-                info[3:3] = screen.note
+                info += screen.note
             if wake == due or resized:
                 screen.convert(stage.cut(shown, at))
             if rain:

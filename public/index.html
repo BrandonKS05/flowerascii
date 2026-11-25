@@ -4,16 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>flowerascii</title>
-<meta name="description" content="A bouquet that blooms in ASCII: an empty vase, white sprinkles, seven flowers, turning.">
+<meta name="description" content="For Michelle: a bouquet that blooms in ASCII, an empty vase, white sprinkles, seven flowers, turning.">
 <meta name="theme-color" content="#000000">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6'/%3E%3Ctext x='16' y='29' font-size='34' text-anchor='middle' fill='%23ff4d94' font-family='monospace'%3E*%3C/text%3E%3C/svg%3E">
-<link rel="preload" href="bloom.bin" as="fetch" crossorigin>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6'/%3E%3Ctext x='16' y='29' font-size='34' text-anchor='middle' fill='%23f0ebe1' font-family='monospace'%3E*%3C/text%3E%3C/svg%3E">
 <style>
   :root {
     --paper: #f0ebe1;
-    --petal: #ff4d94;
-    --quiet: #969cb0;
-    --rule: #4b5263;
+    --quiet: #7f8492;
+    --line: #2b2d35;
+    --side: min(38vw, 46vh, 260px);
     --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "DejaVu Sans Mono",
             "Liberation Mono", monospace;
   }
@@ -35,84 +34,120 @@
     padding: 12px 12px 0;
     overflow: hidden;
   }
-  canvas { display: block; opacity: 0; transition: opacity .5s ease; }
-  canvas.on { opacity: 1; }
   [hidden] { display: none !important; }
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+  button:focus-visible { outline: 1px solid var(--paper); outline-offset: 6px; }
 
   #start {
-    font: inherit;
-    font-size: clamp(2.25rem, 11vw, 5rem);
-    font-weight: 700;
-    letter-spacing: .32em;
-    text-transform: uppercase;
-    line-height: 1;
-    padding: .62em .7em .62em 1.02em;
-    color: var(--paper);
-    background: #000;
-    border: 3px solid var(--paper);
-    border-radius: 0;
-    cursor: pointer;
-    box-shadow: 0 0 0 0 rgb(255 77 148 / .0), .22em .22em 0 0 var(--petal);
-    transition: transform .12s ease, box-shadow .12s ease, background .12s ease,
-                color .12s ease, opacity .25s ease;
-    animation: breathe 2.6s ease-in-out infinite;
+    font-size: 15px;
+    letter-spacing: .06em;
+    padding: .8em 2.4em;
+    border: 1px solid var(--line);
+    transition: border-color .15s ease;
   }
-  #start:hover, #start:focus-visible {
-    background: var(--paper);
-    color: #000;
-    outline: none;
+  #start:hover, #start:focus-visible { border-color: var(--paper); }
+
+  #library {
+    display: grid;
+    grid-template-columns: repeat(2, var(--side));
+    gap: clamp(20px, 5vw, 56px);
+    align-items: start;
   }
-  #start:focus-visible { outline: 3px solid var(--petal); outline-offset: 8px; }
-  #start:active { transform: translate(.12em, .12em); box-shadow: .1em .1em 0 0 var(--petal); }
-  #start:disabled { cursor: progress; animation: none; }
-  #start.gone { opacity: 0; pointer-events: none; }
-  @keyframes breathe {
-    50% { box-shadow: 0 0 3.2rem .2rem rgb(255 77 148 / .38), .22em .22em 0 0 var(--petal); }
+  .card { display: block; width: var(--side); text-align: left; }
+  .card span { display: block; }
+  .card .cover {
+    display: grid;
+    place-items: center;
+    width: var(--side);
+    height: var(--side);
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    transition: filter .15s ease;
   }
+  .card .name { font-size: 14px; line-height: 1.4; }
+  .card .note { font-size: 12px; line-height: 1.45; color: var(--quiet); }
+  #michelle:hover .cover, #michelle:focus-visible .cover { filter: grayscale(1) brightness(.5); }
+  #michelle:disabled { cursor: progress; }
+  .soon { color: var(--quiet); cursor: default; }
+
+  #screen { display: block; opacity: 0; transition: opacity .5s ease; }
+  #screen.on { opacity: 1; }
 
   footer {
     height: 46px;
     display: grid;
-    place-items: center;
-  }
-  #again {
-    font: inherit;
+    grid-template-columns: 1fr auto 1fr;
+    column-gap: 32px;
+    align-items: center;
     font-size: 13px;
-    letter-spacing: .14em;
-    padding: .5em 1.1em;
-    color: var(--quiet);
-    background: transparent;
-    border: 1px solid var(--rule);
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity .6s ease, color .12s ease, border-color .12s ease;
   }
+  footer button { color: var(--quiet); transition: color .12s ease, opacity .6s ease; }
+  footer button:hover, footer button:focus-visible { color: var(--paper); }
+  #back { grid-column: 2; }
+  #again { grid-column: 3; justify-self: start; opacity: 0; }
   #again.on { opacity: 1; }
-  #again:hover, #again:focus-visible { color: var(--paper); border-color: var(--paper); outline: none; }
 
   @media (prefers-reduced-motion: reduce) {
-    #start { animation: none; }
-    canvas, #start, #again { transition: none; }
+    #start, .card .cover, #screen, footer button { transition: none; }
   }
 </style>
 </head>
 <body>
 <main>
   <button id="start" type="button">Start</button>
+  <div id="library" hidden>
+    <button id="michelle" class="card" type="button">
+      <span class="cover"><canvas id="art" aria-hidden="true"></canvas></span>
+      <span class="name">For Michelle</span>
+      <span class="note" id="note">I Wanted to Leave by SYML</span>
+    </button>
+    <div class="card soon">
+      <span class="cover"></span>
+      <span class="name">Cars</span>
+      <span class="note">Coming soon</span>
+    </div>
+  </div>
   <canvas id="screen" role="img" hidden
           aria-label="ASCII animation: white sprinkles drip onto an empty vase; seven flowers grow out of it and bloom while the bouquet turns."></canvas>
 </main>
-<footer><button id="again" type="button" hidden>replay</button></footer>
+<footer>
+  <button id="back" type="button" hidden>Back</button>
+  <button id="again" type="button" hidden>Replay</button>
+</footer>
+<audio id="song" preload="none">
+  <source src="for-michelle.mp3">
+  <source src="for-michelle.m4a" type="audio/mp4">
+</audio>
 
 <script>
 "use strict";
 const FONT = getComputedStyle(document.documentElement).getPropertyValue("--mono");
+const INKS = Array.from({ length: 4096 }, (_, c) =>
+  `rgb(${(c >> 8) * 17},${(c >> 4 & 15) * 17},${(c & 15) * 17})`);
 const start = document.getElementById("start");
-const again = document.getElementById("again");
+const library = document.getElementById("library");
+const michelle = document.getElementById("michelle");
+const note = document.getElementById("note");
+const art = document.getElementById("art");
 const canvas = document.getElementById("screen");
 const footer = document.querySelector("footer");
+const back = document.getElementById("back");
+const again = document.getElementById("again");
+const song = document.getElementById("song");
 const ctx = canvas.getContext("2d", { alpha: false });
+const TRACK = note.textContent;
 
+const loaded = new Map();
+let list = null;
 let show = null;
 let glyph, ink, paper;
 let cell = null;
@@ -120,10 +155,10 @@ let cursor = -1;
 let clock = -1;
 let began = 0, hiddenAt = 0, timer = 0;
 
-async function load() {
+async function load(file) {
   if (!("DecompressionStream" in window)) throw new Error("old browser");
-  const answer = await fetch("bloom.bin");
-  if (!answer.ok) throw new Error("bloom.bin: " + answer.status);
+  const answer = await fetch(file);
+  if (!answer.ok) throw new Error(file + ": " + answer.status);
   const plain = answer.body.pipeThrough(new DecompressionStream("gzip"));
   const buffer = await new Response(plain).arrayBuffer();
   const bytes = new Uint8Array(buffer), view = new DataView(buffer);
@@ -147,69 +182,117 @@ async function load() {
                   paper: bytes.subarray(at + 3 * k, at + 4 * k) });
     at += 4 * k;
   }
-  const inks = Array.from({ length: 4096 }, (_, c) =>
-    `rgb(${(c >> 8) * 17},${(c >> 4 & 15) * 17},${(c & 15) * 17})`);
   const papers = head.papers.map(c => `rgb(${c >> 16},${c >> 8 & 255},${c & 255})`);
-  return { ...head, count: head.frames, glyphs: Array.from(head.glyphs), inks, papers, frames };
+  return { ...head, file, count: head.frames, glyphs: Array.from(head.glyphs), papers, frames };
 }
 
-function fit() {
-  const ratio = window.devicePixelRatio || 1;
-  const wide = (window.innerWidth - 24) * ratio;
-  const high = (window.innerHeight - footer.offsetHeight - 24) * ratio;
-  let w = Math.max(Math.min(wide / show.cols, high / (2 * show.rows)), 2);
+function room() {
+  return [window.innerWidth - 24, window.innerHeight - footer.offsetHeight - 24];
+}
+
+function pick() {
+  const [wide, high] = room();
+  const size = entry => Math.min(wide / entry.cols, high / (2 * entry.rows));
+  let best = list[0];
+  for (const entry of list) if (size(entry) > 1.15 * size(best)) best = entry;
+  return best;
+}
+
+function fetched(entry) {
+  if (!loaded.has(entry.file)) {
+    const loading = load(entry.file);
+    loading.catch(() => loaded.delete(entry.file));
+    loaded.set(entry.file, loading);
+  }
+  return loaded.get(entry.file);
+}
+
+async function chosen() {
+  list = await shows;
+  return fetched(pick());
+}
+
+function measure(context, cols, rows, wide, high, least) {
+  let w = Math.max(Math.min(wide / cols, high / (2 * rows)), least);
   if (Math.floor(w) >= 0.93 * w) w = Math.floor(w);
-  const xs = Int32Array.from({ length: show.cols + 1 }, (_, i) => Math.round(i * w));
-  const ys = Int32Array.from({ length: show.rows + 1 }, (_, i) => Math.round(i * 2 * w));
-  canvas.width = xs[show.cols];
-  canvas.height = ys[show.rows];
-  canvas.style.width = canvas.width / ratio + "px";
-  canvas.style.height = canvas.height / ratio + "px";
-  ctx.font = `100px ${FONT}`;
-  const m = ctx.measureText("M");
+  const xs = Int32Array.from({ length: cols + 1 }, (_, i) => Math.round(i * w));
+  const ys = Int32Array.from({ length: rows + 1 }, (_, i) => Math.round(i * 2 * w));
+  const ratio = window.devicePixelRatio || 1;
+  context.canvas.width = xs[cols];
+  context.canvas.height = ys[rows];
+  context.canvas.style.width = xs[cols] / ratio + "px";
+  context.canvas.style.height = ys[rows] / ratio + "px";
+  context.font = `100px ${FONT}`;
+  const m = context.measureText("M");
   const up = (m.fontBoundingBoxAscent || 80) / 100, down = (m.fontBoundingBoxDescent || 20) / 100;
   const font = Math.min(w / (m.width / 100), 2 * w / (up + down));
-  cell = { w, xs, ys, font, base: (2 * w - (up + down) * font) / 2 + up * font };
-  paint();
+  return { w, xs, ys, font, base: (2 * w - (up + down) * font) / 2 + up * font };
 }
 
-function paint() {
-  const { cols, rows, glyphs, inks, papers } = show, { w, xs, ys, font, base } = cell;
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function render(context, cell, view, glyph, ink, paper) {
+  const { cols, rows, glyphs, papers } = view, { w, xs, ys, font, base } = cell;
+  context.fillStyle = "#000";
+  context.fillRect(0, 0, context.canvas.width, context.canvas.height);
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols;) {
       const back = paper[y * cols + x];
       let end = x + 1;
       while (end < cols && paper[y * cols + end] === back) end++;
       if (back) {
-        ctx.fillStyle = papers[back];
-        ctx.fillRect(xs[x], ys[y], xs[end] - xs[x], ys[y + 1] - ys[y]);
+        context.fillStyle = papers[back];
+        context.fillRect(xs[x], ys[y], xs[end] - xs[x], ys[y + 1] - ys[y]);
       }
       x = end;
     }
   }
-  ctx.font = `${font}px ${FONT}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
+  context.font = `${font}px ${FONT}`;
+  context.textAlign = "center";
+  context.textBaseline = "alphabetic";
   let last = -1;
   for (let i = 0; i < cols * rows; i++) {
     if (!glyph[i]) continue;
-    if (ink[i] !== last) ctx.fillStyle = inks[last = ink[i]];
+    if (ink[i] !== last) context.fillStyle = INKS[last = ink[i]];
     const column = i % cols, row = (i - column) / cols, c = glyphs[glyph[i]];
     const x = xs[column], y = ys[row], middle = (x + xs[column + 1]) / 2;
     if (c === "●") {
-      ctx.beginPath();
-      ctx.arc(middle, y + w, w * 0.42, 0, 2 * Math.PI);
-      ctx.fill();
+      context.beginPath();
+      context.arc(middle, y + w, w * 0.42, 0, 2 * Math.PI);
+      context.fill();
     } else if (c === "▎") {
-      ctx.fillRect(x, y, Math.max(Math.round(w / 4), 1), ys[row + 1] - y);
+      context.fillRect(x, y, Math.max(Math.round(w / 4), 1), ys[row + 1] - y);
     } else if (c === "—") {
-      ctx.fillRect(x, y + Math.round(w * 1.04), xs[column + 1] - x, Math.max(Math.round(font / 14), 1));
+      context.fillRect(x, y + Math.round(w * 1.04), xs[column + 1] - x, Math.max(Math.round(font / 14), 1));
     } else {
-      ctx.fillText(c, middle, y + base);
+      context.fillText(c, middle, y + base);
     }
   }
+}
+
+function fit() {
+  const ratio = window.devicePixelRatio || 1;
+  const [wide, high] = room().map(side => side * ratio);
+  cell = measure(ctx, show.cols, show.rows, wide, high, 2);
+  paint();
+}
+
+function paint() {
+  render(ctx, cell, show, glyph, ink, paper);
+}
+
+async function sleeve() {
+  let still;
+  try {
+    still = await cover;
+  } catch (error) {
+    return;
+  }
+  if (library.hidden) return;
+  const side = (art.parentElement.clientWidth - 12) * (window.devicePixelRatio || 1);
+  const { cols, rows, glyphs, glyph, ink, paper } = still;
+  if (side < 1 || !cols || !rows) return;
+  const context = art.getContext("2d", { alpha: false });
+  render(context, measure(context, cols, rows, side, side, 1), { cols, rows, glyphs, papers: [] },
+         glyph, ink, paper);
 }
 
 function apply(frame) {
@@ -251,45 +334,136 @@ function tick(now) {
   else timer = 0;
 }
 
-function play() {
+function blank() {
   const cells = show.cols * show.rows;
   glyph = new Uint8Array(cells);
   ink = new Uint16Array(cells);
   paper = new Uint8Array(cells);
-  cursor = clock = -1;
+  cursor = -1;
+}
+
+function play() {
+  blank();
+  clock = -1;
   again.classList.remove("on");
   again.hidden = true;
+  back.hidden = false;
+  library.hidden = true;
   canvas.hidden = false;
   fit();
   canvas.classList.add("on");
   began = performance.now();
   cancelAnimationFrame(timer);
   timer = requestAnimationFrame(tick);
+  reshape();
 }
 
-const ready = load();
-ready.catch(() => {});
+function sing() {
+  song.currentTime = 0;
+  song.play().catch(() => {});
+}
 
-start.addEventListener("click", async () => {
-  start.disabled = true;
-  const slow = setTimeout(() => { start.textContent = "Loading"; }, 250);
+function leave() {
+  cancelAnimationFrame(timer);
+  timer = 0;
+  song.pause();
+  canvas.classList.remove("on");
+  canvas.hidden = true;
+  again.classList.remove("on");
+  again.hidden = true;
+  back.hidden = true;
+  library.hidden = false;
+  sleeve();
+  michelle.focus();
+}
+
+async function reshape() {
+  if (!library.hidden) sleeve();
+  if (!show || canvas.hidden) return;
+  fit();
+  const entry = pick();
+  if (entry.file === show.file) return;
+  let next;
   try {
-    show = await ready;
+    next = await fetched(entry);
+  } catch (error) {
+    return;
+  }
+  if (canvas.hidden || next === show || pick().file !== next.file) return;
+  show = next;
+  blank();
+  const turn = show.count - show.loop;
+  let spot = Math.min(clock, show.count - 1);
+  if (turn > 0 && clock >= show.count) spot = show.loop + (clock - show.loop) % turn;
+  while (cursor < spot) apply(show.frames[++cursor]);
+  fit();
+}
+
+const shows = fetch("shows.json", { cache: "no-store" }).then(answer => {
+  if (!answer.ok) throw new Error("shows.json: " + answer.status);
+  return answer.json();
+});
+const cover = fetch("cover.json", { cache: "no-store" }).then(answer => {
+  if (!answer.ok) throw new Error("cover.json: " + answer.status);
+  return answer.json();
+}).then(still => {
+  const text = Array.from(still.text);
+  const glyphs = [" ", ...new Set(text.filter(c => c !== " "))];
+  return { cols: still.cols, rows: still.rows, glyphs,
+           glyph: Uint8Array.from(text, c => glyphs.indexOf(c)),
+           ink: Uint16Array.from(text, (_, i) => parseInt(still.ink.slice(3 * i, 3 * i + 3), 16)),
+           paper: new Uint8Array(text.length) };
+});
+chosen().catch(() => {});
+cover.catch(() => {});
+
+start.addEventListener("click", () => {
+  song.preload = "auto";
+  start.hidden = true;
+  library.hidden = false;
+  sleeve();
+  michelle.focus();
+});
+
+michelle.addEventListener("click", async event => {
+  if (event.detail > 1) return;
+  michelle.disabled = true;
+  sing();
+  const slow = setTimeout(() => { note.textContent = "Loading"; }, 250);
+  try {
+    show = await chosen();
   } catch (error) {
     clearTimeout(slow);
-    start.style.fontSize = "1.1rem";
-    start.style.letterSpacing = ".08em";
-    start.textContent = error.message === "old browser"
-      ? "This browser is too old for the show" : "Could not load the show. Reload to try again";
+    song.pause();
+    note.textContent = error.message === "old browser"
+      ? "This browser is too old for the show" : "Could not load the show. Reload the page to try again";
     return;
   }
   clearTimeout(slow);
-  start.classList.add("gone");
-  setTimeout(() => { start.hidden = true; play(); }, 260);
+  note.textContent = TRACK;
+  michelle.disabled = false;
+  play();
 });
 
-again.addEventListener("click", play);
-window.addEventListener("resize", () => { if (show && !canvas.hidden) fit(); });
+again.addEventListener("click", async () => {
+  again.disabled = true;
+  sing();
+  try {
+    show = await chosen();
+  } catch (error) {}
+  again.disabled = false;
+  if (!canvas.hidden) play();
+});
+
+back.addEventListener("click", leave);
+window.addEventListener("resize", reshape);
+document.addEventListener("keydown", event => {
+  if (event.key === "Enter" && event.repeat) event.preventDefault();
+  if (event.key === "Escape" && !canvas.hidden) leave();
+});
+window.addEventListener("pageshow", event => {
+  if (event.persisted && !canvas.hidden && !song.ended) song.play().catch(() => {});
+});
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) hiddenAt = performance.now();
   else if (hiddenAt) { began += performance.now() - hiddenAt; hiddenAt = 0; }

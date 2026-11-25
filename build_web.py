@@ -5,6 +5,7 @@
 # ///
 import argparse
 import gzip
+import hashlib
 import json
 import os
 import struct
@@ -15,6 +16,7 @@ import numpy as np
 import ascii_player as player
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+SHOWS = (("bloom-wide.bin", 180, 55), ("bloom-tall.bin", 114, 73))
 
 
 class Page:
@@ -62,31 +64,23 @@ def record(path, cols, rows, fps):
         if rain:
             rain.fall(screen, at, stage.wet(at))
         info = [name, f"{fps:.4g} fps", player.clock(at) + length, count]
-        info[3:3] = screen.note
+        info += screen.note
         pane.paint(screen, at, info)
         screen.draw()
         if index % max(round(fps / 4), 1) == 0:
             count = f"{screen.redrawn:4d} cells redrawn"
         ink = np.where(screen.glyph == player.SPACE, 0, screen.ink)
-        yield screen.glyph.copy(), ink, screen.paper.copy()
+        yield screen.glyph.copy(), ink, screen.paper.copy(), screen.area
         ok, following = video.read()
         if ok and following is not frame and stage.fit(following):
             screen.layout(cols, rows, *stage.shape)
         frame, index = following, index + 1
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Record ascii_player's show for the "
-                                                 "web page in public/.")
-    parser.add_argument("video", nargs="?", default=os.path.join(HERE, "demo_bloom.mp4"))
-    parser.add_argument("--cols", type=int, default=114, help="width of the screen")
-    parser.add_argument("--rows", type=int, default=59, help="height of the screen")
-    parser.add_argument("--fps", type=float, default=20.0, help="frames per second")
-    parser.add_argument("-o", "--out", default=os.path.join(HERE, "public", "bloom.bin"))
-    args = parser.parse_args()
-    if not 1 <= args.cols * args.rows <= 65535:
-        parser.error("the screen must have 1 to 65535 cells")
-    show = record(args.video, args.cols, args.rows, args.fps)
+def pack(path, cols, rows, fps):
+    if not 1 <= cols * rows <= 65535:
+        raise SystemExit("build_web: the screen must have 1 to 65535 cells")
+    show = record(path, cols, rows, fps)
     turn = next(show)
     glyphs, papers, frames, changed = [ord(" ")], [0], [], 0
 
@@ -105,10 +99,11 @@ def main():
                 + index(glyph, glyphs).tobytes() + ink.astype("<u2").tobytes()
                 + index(paper, papers).tobytes())
 
-    states = [(np.full((args.rows, args.cols), player.SPACE, np.uint32),
-               np.zeros((args.rows, args.cols), np.uint32),
-               np.zeros((args.rows, args.cols), np.uint32))]
-    for now in show:
+    states = [(np.full((rows, cols), player.SPACE, np.uint32),
+               np.zeros((rows, cols), np.uint32),
+               np.zeros((rows, cols), np.uint32))]
+    area = np.s_[:0, :0]
+    for *now, area in show:
         r, g, b = (((now[1] >> shift & 255) * 15 + 127) // 255 for shift in (16, 8, 0))
         now = now[0], r << 8 | g << 4 | b, now[2]
         frames.append(change(states[-1], now))
@@ -118,21 +113,52 @@ def main():
     back = change(states[-1], states[-turn] if 0 < turn < len(states) else states[-1])
     if len(glyphs) > 256 or len(papers) > 256:
         raise SystemExit("build_web: more than 256 different characters or backgrounds")
-    fps = args.fps
-    head = json.dumps({"cols": args.cols, "rows": args.rows, "fps": fps,
+    head = json.dumps({"cols": cols, "rows": rows, "fps": fps,
                        "frames": len(frames), "loop": loop,
                        "glyphs": "".join(map(chr, glyphs)), "papers": papers}).encode()
+    count = len(frames)
     frames.append(back)
     data = b"FLW2" + struct.pack("<I", len(head)) + head + b"".join(frames)
     packed = gzip.compress(data, 9, mtime=0)
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
-    with open(args.out, "wb") as out:
-        out.write(packed)
-    count = len(frames) - 1
-    print(f"{args.out}: {count} frames at {fps:.4g} fps ({count / fps:.1f} s, the last "
-          f"{(count - loop) / fps:.1f} s go round for ever) on {args.cols}x{args.rows} "
-          f"cells, {changed / count:.0f} cells changed per frame, "
-          f"{len(data) / 1e6:.2f} MB -> {len(packed) / 1e3:.0f} kB gzip")
+    told = (f"{count} frames at {fps:.4g} fps ({count / fps:.1f} s, the last "
+            f"{(count - loop) / fps:.1f} s go round for ever) on {cols}x{rows} cells, "
+            f"{changed / max(count, 1):.0f} cells changed per frame, "
+            f"{len(data) / 1e6:.2f} MB -> {len(packed) / 1e3:.0f} kB gzip")
+    glyph, ink = states[-1][0][area], states[-1][1][area]
+    lit = np.argwhere(glyph != player.SPACE)
+    if lit.size:
+        (top, left), (bottom, right) = lit.min(axis=0), lit.max(axis=0) + 1
+        glyph, ink = glyph[top:bottom, left:right], ink[top:bottom, left:right]
+    still = {"cols": glyph.shape[1], "rows": glyph.shape[0],
+             "text": "".join(map(chr, glyph.ravel().tolist())),
+             "ink": "".join(f"{value:03x}" for value in ink.ravel().tolist())}
+    return packed, told, still
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Record ascii_player's show for the "
+                                                 "web page in public/.")
+    parser.add_argument("video", nargs="?", default=os.path.join(HERE, "demo_bloom.mp4"))
+    parser.add_argument("--fps", type=float, default=20.0, help="frames per second")
+    parser.add_argument("--out", default=os.path.join(HERE, "public"), metavar="FOLDER",
+                        help="where the recordings and shows.json go")
+    args = parser.parse_args()
+    os.makedirs(args.out, exist_ok=True)
+    listed, cover = [], None
+    for name, cols, rows in SHOWS:
+        packed, told, still = pack(args.video, cols, rows, args.fps)
+        cover = cover or still
+        with open(os.path.join(args.out, name), "wb") as out:
+            out.write(packed)
+        stamp = hashlib.sha256(packed).hexdigest()[:10]
+        listed.append({"file": f"{name}?v={stamp}", "cols": cols, "rows": rows})
+        print(f"{os.path.join(args.out, name)}: {told}")
+    with open(os.path.join(args.out, "shows.json"), "w", encoding="utf-8") as out:
+        json.dump(listed, out, indent=2)
+        out.write("\n")
+    with open(os.path.join(args.out, "cover.json"), "w", encoding="utf-8") as out:
+        json.dump(cover, out)
+        out.write("\n")
 
 
 if __name__ == "__main__":
