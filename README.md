@@ -4,18 +4,31 @@ A bouquet that blooms in ASCII. An empty vase, white sprinkles dripping down on 
 and twelve flowers that grow out of it one after the other, each in its own color and
 size, while the whole bouquet turns. Each flower starts as a bud at the mouth of the
 vase and climbs on a leafy stem that gets longer while it opens; the bouquet takes
-half a minute to grow, until it stands three times as high as its vase. The sprinkles
-never stop. They rain from the top of the picture on the vase and the flowers, and
-not into the black beside the bouquet. Every character is picked from a video frame
-by `ascii_player.py`; beside the picture a fake editor pane scrolls through that file.
+half a minute to grow, until it stands a good three times as high as its vase. The
+sprinkles never stop. They rain from the top of the picture on the vase and the
+flowers, and not into the black beside the bouquet. Every character is picked from a
+video frame by `ascii_player.py`; beside the picture a fake editor pane scrolls
+through that file.
+
+Around that the show has its flourishes. The vase puts itself together out of
+scrambled characters. Sparks jump from its mouth whenever a flower sprouts. As a
+flower finishes opening, a light runs up its stem and the flower throws sparks of its
+own color. Rain splashes off the petals, a sheen runs over the bouquet, petals drift
+down from the open flowers, and three butterflies come to stay. When the last flower
+is open the whole bouquet flashes and throws sparks, and from then on little hearts
+rise from it.
 
 ## In the browser
 
 `public/` is a static page: a plain **Start** button, then two playlist cards. **For
 Michelle** opens the show, with its song playing over it; **Cars** is coming soon and
 does nothing yet. The show is a recording of the terminal player, so the page does no
-video work of its own. After the last flower has opened, the bouquet keeps turning
-and the sprinkles keep falling.
+video work of its own. After the last flower has opened, the bouquet keeps turning,
+and the sprinkles, the petals, the hearts and the butterflies go on with it.
+
+The cards fade in, and the cover of For Michelle puts itself together out of
+scrambled characters, the way the vase does when the show starts. Where the system
+asks for reduced motion, both are simply there.
 
 The song is "I Wanted to Leave" by SYML, in `public/for-michelle.m4a`. The page plays
 that file, or `public/for-michelle.mp3` in its place, and runs silent when neither is
@@ -40,9 +53,9 @@ Vercel serves `public/` as it is (see `vercel.json`); nothing is built there.
 uv run ascii_player.py demo_bloom.mp4
 ```
 
-`q` or Ctrl+C quits. The picture is 92 x 64 characters, higher than it is wide, and
-the editor pane is a smaller window beside it, up to 64 x 45, so the show wants a big
-terminal: 160 columns or more, and 64 rows. In a smaller one the picture shrinks, and
+`q` or Ctrl+C quits. The picture is 92 x 62 characters, higher than it is wide, and
+the editor pane is a smaller window beside it, up to 64 x 43, so the show wants a big
+terminal: 160 columns or more, and 62 rows. In a smaller one the picture shrinks, and
 the pane's status bar says so where it has room; where the pane beside it would cost
 the picture too much, as in a narrow, tall window, the pane goes below it.
 
@@ -57,12 +70,13 @@ The terminal needs 24-bit color. VS Code brightens dim text unless
 `terminal.integrated.minimumContrastRatio` is 1.
 
 Some options: `--once`, `--cols N`, `--flowers N` (1 to 12), `--no-sprinkles`,
-`--no-vase`, `--vase-color RRGGBB`, `--bg`, `--no-crop`. `--help` lists them all.
+`--plain` (the bouquet and the sprinkles without the flourishes), `--no-vase`,
+`--vase-color RRGGBB`, `--bg`, `--no-crop`. `--help` lists them all.
 
 Any video of one subject on a black backdrop works in place of `demo_bloom.mp4`.
 
 How tall the bouquet grows is set by a few numbers at the top of `ascii_player.py`.
-`LONG` is how long a stem gets, in stems of the video's own flower: at 2.4 it is more
+`LONG` is how long a stem gets, in stems of the video's own flower: at 2.15 it is more
 than the video shows, so the picture goes on below the end of the video's stem with
 the lowest part of that stem, the share `STALK` of the subject's height, repeated:
 once upside down, once upright, and so on. `STUB` is the stem a flower starts with,
@@ -82,6 +96,28 @@ into the next with a glint; where nothing drawn is left below it, it goes out. T
 specks come by a list that is as long as one turn of the bouquet and starts again with
 every turn, so the turn that the page repeats for ever shows no jump.
 
+The flourishes have their numbers there too. `DECODE` is how many seconds the vase
+takes to put itself together, and `SCRAMBLE` how long each of its characters flickers
+through others first. `BURST` is how many sparks a flower throws in the finale, on a
+picture 70 characters wide; a bloom throws about as many, more for a big flower, and
+a sprout half as many. `DRAG` is how fast the sparks slow down. `RISE` is how many
+seconds the light takes to run up a stem, and `POP` how long the flower stays lit
+after it. `BEAT` is the pause between the last bloom and the flash of the whole
+bouquet, and `FLASH` how long that takes to fade. `PETALS` is how many petals fall
+each second and `HEARTS` how many hearts rise, again on a picture 70 characters wide.
+`SHEEN` is how strong the light is that runs over the bouquet twice in every turn,
+and `SWEEP` how many seconds it takes to cross. `FLIGHT` has a line for every
+butterfly: how far it flies to the sides, how far below the top of the picture it
+stays, how far it goes up and down, and its color. `MARKS` holds the characters: a
+spark's from young to old, a petal's as it tumbles, the two halves of a heart, and a
+splash's. `WINGS` is the beat of a butterfly's wings and `PINKS` the hearts' colors.
+A splash shows only above the bouquet, like the sprinkles it comes from.
+
+`FINALE` is the time between the last flower's bloom and the turn that the page
+repeats for ever. No petal and no heart lives longer than that, so the turn starts
+with nothing left over from the growing; like the sprinkles they come by a list one
+turn long. `--plain` leaves the flourishes out.
+
 ## Recording the show again
 
 After a change to `ascii_player.py` or to the video, write the recordings again:
@@ -91,12 +127,12 @@ uv run build_web.py
 ```
 
 It runs the same code that draws in the terminal at 20 frames per second, once on a
-screen of 161 x 64 characters and once on one of 92 x 84, and writes down the cells
+screen of 161 x 62 characters and once on one of 92 x 80, and writes down the cells
 that change. It also writes `public/shows.json`, the list the page chooses from: each
 recording's size, and its file name with a stamp of its contents, so that a browser
 never plays an old copy. And it writes `public/cover.json`, the finished bouquet
-without the sprinkles, as characters and colors, which the page draws on the For
-Michelle card.
+without the sprinkles and the flourishes, as characters and colors, which the page
+draws on the For Michelle card.
 
 The show ends with the finished bouquet turning once in the sprinkles, and the page
 goes on with that turn for ever, so one more record follows the last frame: the cells

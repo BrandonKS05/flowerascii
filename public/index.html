@@ -79,6 +79,11 @@
   #michelle:disabled { cursor: progress; }
   .soon { color: var(--quiet); cursor: default; }
 
+  @keyframes arrive { from { opacity: 0; transform: translateY(10px); } }
+  .card { animation: arrive .55s ease both; }
+  .card + .card { animation-delay: .09s; }
+  #back { animation: arrive .55s ease both; }
+
   #screen { display: block; opacity: 0; transition: opacity .5s ease; }
   #screen.on { opacity: 1; }
 
@@ -98,6 +103,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     #start, .card .cover, #screen, footer button { transition: none; }
+    .card, #back { animation: none; }
   }
 </style>
 </head>
@@ -117,7 +123,7 @@
     </div>
   </div>
   <canvas id="screen" role="img" hidden
-          aria-label="ASCII animation: white sprinkles drip onto an empty vase; twelve flowers grow out of it and bloom while the bouquet turns."></canvas>
+          aria-label="ASCII animation: white sprinkles drip onto an empty vase; twelve flowers grow out of it and bloom while the bouquet turns, with sparks, falling petals, butterflies and little hearts."></canvas>
 </main>
 <footer>
   <button id="back" type="button" hidden>Back</button>
@@ -145,6 +151,8 @@ const again = document.getElementById("again");
 const song = document.getElementById("song");
 const ctx = canvas.getContext("2d", { alpha: false });
 const TRACK = note.textContent;
+const CALM = window.matchMedia("(prefers-reduced-motion: reduce)");
+const UNVEIL = 0.9;
 
 const loaded = new Map();
 let list = null;
@@ -153,7 +161,7 @@ let glyph, ink, paper;
 let cell = null;
 let cursor = -1;
 let clock = -1;
-let began = 0, hiddenAt = 0, timer = 0;
+let began = 0, hiddenAt = 0, timer = 0, unveil = 0;
 
 async function load(file) {
   if (!("DecompressionStream" in window)) throw new Error("old browser");
@@ -279,7 +287,7 @@ function paint() {
   render(ctx, cell, show, glyph, ink, paper);
 }
 
-async function sleeve() {
+async function sleeve(fresh) {
   let still;
   try {
     still = await cover;
@@ -291,8 +299,30 @@ async function sleeve() {
   const { cols, rows, glyphs, glyph, ink, paper } = still;
   if (side < 1 || !cols || !rows) return;
   const context = art.getContext("2d", { alpha: false });
-  render(context, measure(context, cols, rows, side, side, 1), { cols, rows, glyphs, papers: [] },
-         glyph, ink, paper);
+  const cell = measure(context, cols, rows, side, side, 1);
+  const view = { cols, rows, glyphs, papers: [] };
+  cancelAnimationFrame(unveil);
+  unveil = 0;
+  if (!fresh || CALM.matches || glyphs.length < 2) {
+    render(context, cell, view, glyph, ink, paper);
+    return;
+  }
+  const grain = Float32Array.from(glyph, Math.random);
+  const mixed = new Uint8Array(glyph.length), dim = new Uint16Array(ink.length);
+  const born = performance.now();
+  const draw = now => {
+    const at = Math.max(now - born, 0) / 1000 / UNVEIL;
+    const beat = Math.floor(at * UNVEIL * 15) * 0.618;
+    for (let i = 0; i < glyph.length; i++) {
+      const wait = 0.3 + 0.45 * (1 - Math.floor(i / cols) / rows) + 0.25 * grain[i] - at;
+      const pick = 1 + Math.floor((grain[i] * 977 + beat) % 1 * (glyphs.length - 1));
+      mixed[i] = !glyph[i] || wait > 0.27 ? 0 : wait > 0 ? pick : glyph[i];
+      dim[i] = wait > 0 ? ink[i] >> 1 & 0x777 : ink[i];
+    }
+    render(context, cell, view, mixed, dim, paper);
+    unveil = at < 1 && !library.hidden ? requestAnimationFrame(draw) : 0;
+  };
+  unveil = requestAnimationFrame(draw);
 }
 
 function apply(frame) {
@@ -373,7 +403,7 @@ function leave() {
   again.hidden = true;
   back.hidden = true;
   library.hidden = false;
-  sleeve();
+  sleeve(true);
   michelle.focus();
 }
 
@@ -421,7 +451,7 @@ start.addEventListener("click", () => {
   song.preload = "auto";
   start.hidden = true;
   library.hidden = false;
-  sleeve();
+  sleeve(true);
   michelle.focus();
 });
 

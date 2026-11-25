@@ -16,7 +16,7 @@ import numpy as np
 import ascii_player as player
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SHOWS = (("bloom-wide.bin", 161, 64), ("bloom-tall.bin", 92, 84))
+SHOWS = (("bloom-wide.bin", 161, 62), ("bloom-tall.bin", 92, 80))
 
 
 class Page:
@@ -53,7 +53,7 @@ def record(path, cols, rows, fps):
     name, count = player.cells(os.path.basename(path)), "   0 cells redrawn"
     screen = player.Renderer(Page(cols, rows), gain=1.0 / white)
     pane = player.CodePane(player.__file__)
-    rain = player.Sprinkles() if stage.blooms else None
+    extras = player.Flourish(stage) if stage.blooms else None
     screen.layout(cols, rows, *stage.shape)
     yield round(player.ENCORE * fps) if stage.blooms and player.TURN else 0
     ok, frame = video.read()
@@ -61,8 +61,8 @@ def record(path, cols, rows, fps):
     while ok:
         at = index / fps
         screen.convert(stage.cut(frame, at))
-        if rain:
-            rain.fall(screen, at)
+        if extras:
+            extras.play(screen, at, at)
         info = [name, f"{fps:.4g} fps", player.clock(at) + length, count]
         info += screen.note
         pane.paint(screen, at, info)

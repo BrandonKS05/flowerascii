@@ -57,20 +57,20 @@ VASE_HEIGHT = 0.33
 VASE_WIDTH = 0.33
 VASE_FOOT = 0.65
 FLOWERS = 12
-BOUQUET = ((170.0, 7.0, 0.72, 0.0, 0.0, 1.5, 1.0),
-           (20.0, 15.0, 1.00, -115.0, 0.75, 3.6, 1.0),
-           (250.0, 24.0, 0.62, -115.0, 0.0, 6.3, 0.80),
-           (95.0, 31.0, 0.52, 45.0, 0.0, 9.0, 0.66),
-           (310.0, 34.0, 0.47, -55.0, 0.0, 11.4, 0.56),
-           (140.0, 22.0, 0.65, -62.0, 0.5, 7.5, 0.90),
-           (205.0, 29.0, 0.55, 88.0, 0.0, 13.5, 0.70),
-           (55.0, 27.0, 0.58, 65.0, 0.0, 4.8, 0.85),
-           (285.0, 16.0, 0.78, -30.0, 0.3, 2.6, 1.0),
-           (350.0, 36.0, 0.44, -85.0, 0.0, 10.2, 0.60),
-           (120.0, 38.0, 0.42, -140.0, 0.0, 12.4, 0.50),
-           (330.0, 26.0, 0.60, 0.0, 0.6, 8.2, 0.75))
+BOUQUET = ((170.0, 7.0, 0.81, 0.0, 0.0, 1.5, 1.0),
+           (20.0, 15.0, 1.12, -115.0, 0.75, 3.6, 1.0),
+           (250.0, 24.0, 0.69, -115.0, 0.0, 6.3, 0.80),
+           (95.0, 31.0, 0.58, 45.0, 0.0, 9.0, 0.66),
+           (310.0, 34.0, 0.53, -55.0, 0.0, 11.4, 0.56),
+           (140.0, 22.0, 0.73, -62.0, 0.5, 7.5, 0.90),
+           (205.0, 29.0, 0.62, 88.0, 0.0, 13.5, 0.70),
+           (55.0, 27.0, 0.65, 65.0, 0.0, 4.8, 0.85),
+           (285.0, 16.0, 0.87, -30.0, 0.3, 2.6, 1.0),
+           (350.0, 36.0, 0.49, -85.0, 0.0, 10.2, 0.60),
+           (120.0, 38.0, 0.47, -140.0, 0.0, 12.4, 0.50),
+           (330.0, 26.0, 0.67, 0.0, 0.6, 8.2, 0.75))
 STEMS = 0.2
-LONG = 2.4
+LONG = 2.15
 STALK = 0.2
 STUB = 0.25
 CLIMB = 0.9
@@ -82,12 +82,30 @@ DEPTH = 0.12
 FLUTES = 9
 SPROUT = 1.8
 ENCORE = TURN
+FINALE = 5.0
 MEMORY = 96
 SPRINKLES = 60.0
 SOAK = 0.2
 SPECKS = "'*+."
 TRAIL = ((ord(":"), 0xB4B4B4), (ord("."), 0x858585))
 GLINT = 0.35
+DECODE = 1.3
+SCRAMBLE = 0.35
+SHEEN = 0.3
+SWEEP = 1.2
+RISE = 0.9
+POP = 0.5
+BEAT = 0.6
+FLASH = 1.5
+BURST = 24.0
+DRAG = 3.0
+PETALS = 2.5
+HEARTS = 0.6
+MARKS = "*+.", "('),", "<", "3", "'."
+WINGS = "}{", ")(", "||", ")("
+FLIGHT = ((0.40, 0.30, 0.15, 0xFFB347), (-0.30, 0.46, 0.20, 0x7FD8FF),
+          (0.24, 0.20, 0.09, 0xFFE66D))
+PINKS = 0xFF7AA8, 0xFF4D6D, 0xFFC2D6
 CELL_ASPECT = 2.0
 SATURATION = 1.35
 CONTRAST = 1.15
@@ -111,6 +129,12 @@ LUMA = np.array([0.2126, 0.7152, 0.0722], np.float32)
 GLYPHS = np.frombuffer(RAMP.encode("utf-32-le"), "<u4")
 STROKES = np.frombuffer("-/|\\_()".encode("utf-32-le"), "<u4")
 SPECK = np.frombuffer(SPECKS.encode("utf-32-le"), "<u4")
+SHAPES = np.array([[ord(marks[i * len(marks) // 12]) for i in range(12)]
+                   for marks in MARKS], np.uint32)
+WING = np.array([[ord(c) for c in wings] for wings in WINGS], np.uint32)
+SHIFTS = np.array([16, 8, 0], np.uint32)
+X, Y, VX, VY, PULL, SLOW, AGE, LIFE, SWING, RATE, PHASE, KIND, TONE = range(13)
+SPARK, PETAL, HEART, SPLASH = 0, 1, 2, 4
 WAYS = np.arange(4, dtype=np.int8)[:, None, None]
 BESIDE = np.ones((3, 3), np.uint8)
 
@@ -635,14 +659,20 @@ class CodePane:
             screen.put(top + rows - 1, left + cols - len(stats) - 2, stats, COMMENT)
 
 
+def brighten(ink, ys, xs, share):
+    rgb = ink[ys, xs][:, None] >> SHIFTS & 255
+    rgb = rgb + (255.0 - rgb) * np.clip(share, 0.0, 1.0)[:, None]
+    r, g, b = np.rint(rgb).astype(np.uint32).T
+    ink[ys, xs] = r << 16 | g << 8 | b
+
+
 class Sprinkles:
     def __init__(self, seed=7):
         self.seed, self.lap = seed, TURN or 10.0
-        self.size, self.then, self.drops = None, None, []
+        self.size, self.then, self.drops, self.hits = None, None, [], []
 
     def fall(self, screen, now):
         glyph, ink = screen.glyph[screen.area], screen.ink[screen.area]
-        glyph[:], ink[:] = screen.shown, screen.colors
         h, w = glyph.shape
         if self.size != (h, w):
             self.size, self.drops = (h, w), []
@@ -653,14 +683,14 @@ class Sprinkles:
                 speed = rng.uniform(0.35, 0.8)
                 self.cast.append((rng.random(), rng.randrange(w), rng.random(),
                                   h * speed, int(rng.random() * h * SOAK),
-                                  int(speed * 4.0 - 1.0)))
+                                  int(speed * 4.0 - 1.0), True))
             self.due = np.array([drop[0] for drop in self.cast])
         past = 0.0 if self.then is None else min(max(now - self.then, 0.0), 0.1)
         self.then = now
         self.glint -= past / GLINT
         np.maximum(self.glint, 0.0, out=self.glint)
-        lit, falling = screen.shown != SPACE, []
-        over = np.cumsum(lit[::-1], axis=0)[::-1] > 0
+        lit, falling, self.hits = screen.shown != SPACE, [], []
+        over = self.over = np.cumsum(lit[::-1], axis=0)[::-1] > 0
         laps = np.floor(now / self.lap - self.due)
         for i in np.flatnonzero(laps > np.floor((now - past) / self.lap - self.due)):
             if over[0, self.cast[i][1]]:
@@ -670,6 +700,9 @@ class Sprinkles:
             y, above = y + speed * past, int(y)
             for row in range(above + 1, min(int(y), h - 1) + 1):
                 if lit[row, x]:
+                    if drop[5]:
+                        drop[5] = False
+                        self.hits.append((x, row, speed))
                     if not deep:
                         self.glint[row, x] = 1.0
                         break
@@ -683,17 +716,211 @@ class Sprinkles:
         self.drops = falling
         ys, xs = np.nonzero((self.glint > 0.0) & lit)
         if ys.size:
-            rgb = ink[ys, xs][:, None] >> np.array([16, 8, 0], np.uint32) & 255
-            rgb = rgb + (255.0 - rgb) * self.glint[ys, xs][:, None]
-            r, g, b = np.rint(rgb).astype(np.uint32).T
-            ink[ys, xs] = r << 16 | g << 8 | b
-        for x, y, _, _, trail in self.drops:
+            brighten(ink, ys, xs, self.glint[ys, xs])
+        for x, y, _, _, trail, _ in self.drops:
             for back, (mark, gray) in enumerate(TRAIL[:trail], 1):
                 if y >= back and not lit[int(y) - back, x]:
                     glyph[int(y) - back, x], ink[int(y) - back, x] = mark, gray
-        for x, y, _, _, _ in self.drops:
+        for x, y, _, _, _, _ in self.drops:
             glyph[int(y), x] = SPECK[int(y % 1.0 * len(SPECK))]
             ink[int(y), x] = 0xFFFFFF
+
+
+class Flourish:
+    def __init__(self, stage, rain=True, more=True, seed=3):
+        self.stage, self.more, self.seed = stage, more, seed
+        self.rain = Sprinkles() if rain else None
+        self.lap = TURN or 10.0
+        self.size = self.then = None
+
+    def fit(self, h, w):
+        self.size, self.bits, self.glows = (h, w), np.zeros((0, TONE + 1)), []
+        rng = random.Random(self.seed)
+        count = round((PETALS + HEARTS) * self.lap * w / TUNED)
+        self.cast = [[rng.random() for _ in range(8)] for _ in range(count)]
+        self.due = np.array([one[0] for one in self.cast])
+        self.grain = np.random.RandomState(self.seed).random_sample((h, w))
+        self.ys, self.xs = np.mgrid[0:h, 0:w].astype(np.float32)
+        self.slant = self.xs / w + 0.5 * self.ys / h
+
+    def play(self, screen, now, at):
+        glyph, ink = screen.glyph[screen.area], screen.ink[screen.area]
+        glyph[:], ink[:] = screen.shown, screen.colors
+        if self.more:
+            if self.size != glyph.shape:
+                self.fit(*glyph.shape)
+            if self.then is None or at < self.then:
+                self.then, self.bits, self.glows = at - 1e-6, self.bits[:0], []
+            (h, w), (high, across) = glyph.shape, self.stage.shape
+            x0, y0 = self.stage.box[:2]
+            self.squash = h * across / (w * high)
+            self.mouth = ((self.stage.mouth[0] - x0) / across * w,
+                          (self.stage.mouth[1] - y0) / high * h)
+            self.shine(screen, glyph, ink, at)
+        if self.rain:
+            self.rain.fall(screen, now)
+        if self.more:
+            self.cue(screen, at)
+            self.drift(screen, glyph, ink, at)
+            self.then = at
+
+    def shine(self, screen, glyph, ink, at):
+        lit = screen.shown != SPACE
+        glow = np.zeros(glyph.shape, np.float32)
+        rows = np.flatnonzero(lit.any(axis=1))
+        if at < DECODE and rows.size:
+            rank = (self.ys - rows[0]) / (rows[-1] - rows[0] + 1.0)
+            wait = DECODE * (0.3 + 0.45 * rank + 0.25 * self.grain) - at
+            pick = (self.grain * 977.0 + int(at * 15.0) * 0.618) % 1.0
+            pick = (pick * (len(RAMP) - 1)).astype(np.intp) + 1
+            mixed = lit & (wait > 0.0)
+            glyph[mixed] = GLYPHS[pick][mixed]
+            ink[mixed] = ink[mixed] >> 1 & 0x7F7F7F
+            glyph[lit & (wait > SCRAMBLE)] = SPACE
+            glow = 0.6 * np.clip(1.0 + wait / 0.2, 0.0, 1.0) * (wait <= 0.0)
+        sweep = (at + self.lap / 4.0) % (self.lap / 2.0) / SWEEP
+        if sweep < 1.0:
+            near = np.abs(self.slant + 0.15 - 1.8 * sweep)
+            near = np.clip(1.0 - near / 0.1, 0.0, 1.0)
+            glow = np.maximum(glow, SHEEN * near * near * (3.0 - 2.0 * near))
+        for flower in self.stage.blooms:
+            ahead = (flower.done - at) / RISE
+            if 0.0 < ahead <= 1.0:
+                x, y, reach = self.spot(flower, at)
+                x, y = x + (self.mouth[0] - x) * ahead, y + (self.mouth[1] - y) * ahead
+                far = np.hypot(self.xs - x, (self.ys - y) / self.squash) / reach
+                glow = np.maximum(glow, 0.8 * np.clip(1.0 - 2.0 * far, 0.0, 1.0))
+        for x, y, reach, born in self.glows:
+            far = np.hypot(self.xs - x, (self.ys - y) / self.squash) / reach
+            fade = 0.9 * (1.0 - (at - born) / POP)
+            glow = np.maximum(glow, fade * np.clip(1.4 - far, 0.0, 1.0))
+        self.glows = [one for one in self.glows if at - one[3] < POP]
+        since = at - self.stage.over - BEAT
+        if 0.0 <= since < FLASH:
+            glow = np.maximum(glow, 0.6 * (1.0 - since / FLASH) ** 2)
+        ys, xs = np.nonzero((glow > 0.01) & (glyph != SPACE))
+        if ys.size:
+            brighten(ink, ys, xs, glow[ys, xs])
+
+    def spot(self, flower, at):
+        x, y, reach = self.stage.spot(flower, at)
+        return x * self.size[1], y * self.size[0], max(reach * self.size[1], 0.5)
+
+    def tone(self, screen, x, y, reach):
+        high, wide = 0.5 * reach * self.squash, 0.5 * reach
+        patch = screen.colors[max(int(y - high), 0):max(int(y + high) + 1, 0),
+                              max(int(x - wide), 0):max(int(x + wide) + 1, 0)]
+        rgb = (patch.reshape(-1, 1) >> SHIFTS & 255).astype(np.int64)
+        if not rgb.size or rgb.max() < 48:
+            return 0xFFFFFF
+        best = rgb[(2 * rgb.max(axis=1) - rgb.min(axis=1)).argmax()]
+        r, g, b = (best * 255 // best.max()).tolist()
+        return r << 16 | g << 8 | b
+
+    def burst(self, x, y, reach, count, tone, life, fan=(0.0, 2.0), pull=0.0):
+        order = np.arange(max(count, 1))
+        turn = (order + (order * 0.618 + x) % 1.0) / len(order)
+        turn = np.pi * (fan[0] + (fan[1] - fan[0]) * turn)
+        far = reach * (0.45 + 0.55 * ((order * 0.755 + y) % 1.0))
+        speed = far * DRAG / (1.0 - np.exp(-DRAG * life))
+        bits = np.zeros((len(order), TONE + 1))
+        bits[:, X], bits[:, Y] = x, y
+        bits[:, VX] = np.cos(turn) * speed
+        bits[:, VY] = np.sin(turn) * speed * self.squash
+        bits[:, PULL], bits[:, SLOW] = pull, DRAG
+        bits[:, LIFE], bits[:, TONE] = life * (0.7 + 0.3 * (order * 0.371 % 1.0)), tone
+        return bits
+
+    def cue(self, screen, at):
+        h, w = self.size
+        stage, then, squash, born = self.stage, self.then, self.squash, []
+        sparks = round(BURST * w / TUNED)
+        for flower in stage.blooms:
+            if then < flower.wait <= at:
+                born.append(self.burst(*self.mouth, 0.16 * w, sparks // 2, 0xD8FFD0, 0.8,
+                                       (1.3, 1.7), 0.35 * h))
+            if then < flower.done <= at:
+                x, y, reach = self.spot(flower, at)
+                self.glows.append((x, y, reach, at))
+                born.append(self.burst(x, y, 2.3 * reach,
+                                       round(sparks * (0.5 + 0.7 * flower.size)),
+                                       self.tone(screen, x, y, reach), 1.2,
+                                       pull=0.12 * h))
+            if then < stage.over + BEAT <= at:
+                x, y, reach = self.spot(flower, at)
+                born.append(self.burst(x, y, 2.6 * reach, sparks, 0xFFE9A8, 1.6,
+                                       pull=0.15 * h))
+        laps = np.floor(at / self.lap - self.due)
+        for i in np.flatnonzero(laps > np.floor(then / self.lap - self.due)):
+            _, kind, pick, a, b, c, d, e = self.cast[i]
+            flower = stage.blooms[int(pick * len(stage.blooms))]
+            heart = kind * (PETALS + HEARTS) < HEARTS
+            if at < (stage.over + BEAT if heart else flower.done):
+                continue
+            x, y, reach = self.spot(flower, at)
+            if heart:
+                x, y = x + (a - 0.5) * reach, y - 0.6 * reach * squash
+                life, tone = FINALE * (0.45 + 0.2 * e), PINKS[int(c * len(PINKS))]
+                for half in (0, 1):
+                    born.append([x + half, y, 0.0, -(0.03 + 0.025 * d) * h, 0.0, 0.0, 0.0,
+                                 life, 0.012 * w, 2.0 + d, 6.28 * b, HEART + half, tone])
+            else:
+                tone = self.tone(screen, x, y, reach)
+                x, y = x + (a - 0.5) * 1.6 * reach, y + (b - 0.5) * 0.8 * reach * squash
+                born.append([x, y, (c - 0.5) * 0.03 * w, (0.045 + 0.05 * d) * h, 0.0, 0.0,
+                             0.0, FINALE * (0.6 + 0.3 * e), (0.012 + 0.02 * e) * w,
+                             2.0 + 3.0 * d, 6.28 * a, PETAL, tone])
+        for x, row, speed in self.rain.hits if self.rain else ():
+            odd, more = speed * 7.919 % 1.0, speed * 3.317 % 1.0
+            if odd < 0.5:
+                way = (0.05 + 0.1 * more) * w * (1.0 if odd < 0.25 else -1.0)
+                born.append([x + 0.5, row - 0.5, way, -(0.15 + 0.15 * more) * h, 1.5 * h,
+                             0.0, 0.0, 0.35, 0.0, 0.0, 0.0, SPLASH, 0xD0D0D0])
+        if born:
+            self.bits = np.vstack((self.bits, *born))
+
+    def drift(self, screen, glyph, ink, at):
+        h, w = glyph.shape
+        past, bits = min(at - self.then, 0.1), self.bits
+        slow = np.exp(-bits[:, SLOW] * past)
+        bits[:, VX] *= slow
+        bits[:, VY] = bits[:, VY] * slow + bits[:, PULL] * past
+        bits[:, X] += bits[:, VX] * past
+        bits[:, Y] += bits[:, VY] * past
+        bits[:, AGE] += past
+        bits = self.bits = bits[(bits[:, AGE] < bits[:, LIFE]) & (bits[:, Y] < h)]
+        aged, kind = bits[:, AGE] / bits[:, LIFE], bits[:, KIND].astype(np.intp)
+        sway = bits[:, RATE] * bits[:, AGE] + bits[:, PHASE]
+        col = np.floor(bits[:, X] + bits[:, SWING] * np.sin(sway)).astype(np.intp)
+        row = np.floor(bits[:, Y]).astype(np.intp)
+        seen = (col >= 0) & (col < w) & (row >= 0)
+        dry = screen.shown[row[seen], col[seen]] == SPACE
+        if self.rain:
+            dry &= self.rain.over[row[seen], col[seen]]
+        seen[seen] &= (kind[seen] != SPLASH) | dry
+        col, row, kind, aged, sway = (each[seen] for each in (col, row, kind, aged, sway))
+        step = np.where(kind == PETAL, sway / (2.0 * np.pi) % 1.0, aged) * 12.0
+        glyph[row, col] = SHAPES[kind, step.astype(np.intp)]
+        tone = bits[seen, TONE].astype(np.uint32)[:, None] >> SHIFTS & 255
+        hot = np.clip(1.0 - 3.0 * aged, 0.0, 1.0) * (kind == SPARK)
+        tone = tone + (255.0 - tone) * hot[:, None]
+        tone = tone * np.clip(1.5 - 1.5 * aged, 0.2, 1.0)[:, None]
+        r, g, b = tone.astype(np.uint32).T
+        ink[row, col] = r << 16 | g << 8 | b
+        lap, flaps = 2.0 * np.pi * at / self.lap, 4 * round(2.5 * self.lap)
+        span = self.stage.over - self.stage.lead
+        for k, (across, level, up, tone) in enumerate(FLIGHT):
+            since = at - self.stage.lead - (0.45 + 0.17 * k) * span
+            if since < 0.0:
+                continue
+            away = np.sign(across) * max(1.0 - since / 4.0, 0.0) ** 2
+            x = w * (0.5 + across * np.sin(lap + 2.0 * k + 0.3) + away)
+            y = level + up * np.sin(2.0 * lap + 1.3 * k) + 0.012 * np.sin(9.0 * lap + k)
+            col, row = int(np.floor(x)), int(h * y)
+            if 0 <= row < h and 0 <= col < w - 1:
+                beat = int(at / self.lap * flaps + 2 * k + 0.25)
+                glyph[row, col:col + 2] = WING[beat % 4]
+                ink[row, col:col + 2] = tone
 
 
 def clock(seconds):
@@ -844,6 +1071,7 @@ class Stage:
                 flower.stub = min(STUB * high, flower.stem)
                 opening = min(flower.last, length) / self.pace if length else 5.0
                 flower.climb = max(CLIMB * opening, flower.sprout)
+                flower.done = flower.wait + max(opening, flower.sprout)
             self.deep = int(np.ceil(self.head[1] + tall))
             self.stalk = STALK * high
             self.gaps = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
@@ -853,8 +1081,9 @@ class Stage:
             grown = max(flower.wait + flower.climb for flower in self.blooms)
             over = max(flower.wait + min(flower.last, length) / self.pace
                        for flower in self.blooms)
-            over = max(over, grown)
-            self.tail = max(over - length / self.pace, self.lead) + ENCORE - self.lead
+            self.over = over = max(over, grown)
+            self.tail = max(over - length / self.pace, self.lead) + FINALE + ENCORE
+            self.tail -= self.lead
             self.reel = collections.deque(maxlen=MEMORY)
             self.every = (late - self.lead) * self.pace / (MEMORY - 2)
             self.fed = self.fresh = None
@@ -891,6 +1120,21 @@ class Stage:
         to = self.mouth + (0.1 * self.span * x, 0.0)
         place = np.hstack((lay, (to - lay @ root)[:, None]))
         return place, near * stem * flower.size * grown, root[1]
+
+    def pose(self, flower, age):
+        grown = min(age / flower.sprout, 1.0)
+        grown *= grown * (3.0 - 2.0 * grown)
+        risen = min(age / flower.climb, 1.0)
+        return grown, risen * (2.0 - risen)
+
+    def spot(self, flower, now):
+        turn = 2.0 * np.pi * now / TURN if TURN else 0.0
+        grown, risen = self.pose(flower, max(now - flower.wait, 0.0))
+        place = self.place(flower, grown, turn, risen)[0]
+        x, y = place @ (self.head[0], self.head[1], 1.0)
+        x0, y0, x1, y1 = self.box
+        reach = HEAD * (self.subject[3] - self.subject[1]) * np.hypot(*place[:, 1])
+        return (x - x0) / (x1 - x0), (y - y0) / (y1 - y0), reach / (x1 - x0)
 
     def reach(self, lit):
         box = self.pixels(lit_box(lit, 0))
@@ -1040,10 +1284,8 @@ class Stage:
             if age < 0.0:
                 continue
             shown = self.find(flower, min(age * self.pace, flower.last))
-            grown = min(age / flower.sprout, 1.0)
-            grown *= grown * (3.0 - 2.0 * grown)
-            risen = min(age / flower.climb, 1.0)
-            layer = self.paint(flower, shown, grown, turn, risen * (2.0 - risen))
+            grown, risen = self.pose(flower, age)
+            layer = self.paint(flower, shown, grown, turn, risen)
             if layer:
                 layers.append(layer)
         if self.vase:
@@ -1108,7 +1350,7 @@ class Reel:
 
 
 def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_COLOR,
-         flowers=FLOWERS, sprinkles=True):
+         flowers=FLOWERS, sprinkles=True, plain=False):
     video = Reel(path)
     frame, film = video.first, video.film
     if frame is None:
@@ -1127,7 +1369,8 @@ def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_C
     video.step = stage.pace
     length = video.lead + total / stage.pace + video.tail
     length = f" / {clock(length / fps)}" if total else ""
-    rain = Sprinkles() if sprinkles and stage.blooms else None
+    extras = stage.blooms and (sprinkles or not plain)
+    extras = Flourish(stage, sprinkles, not plain) if extras else None
     screen = Renderer(term, gain=1.0 / white, cols=cols, backdrop=backdrop)
     pane = CodePane(os.path.abspath(__file__))
     try:
@@ -1143,7 +1386,7 @@ def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_C
                 high, across = stage.shape
                 screen.layout(*term.size(), high, across * wide)
             due = start + index / fps
-            idle = 0.0 if resized else 0.05 if rain else 0.1
+            idle = 0.0 if resized else 0.05 if extras else 0.1
             wake = min(due, time.perf_counter() + idle)
             if wake == due:
                 if frame is None:
@@ -1154,8 +1397,8 @@ def play(path, loop=True, cols=GRID_COLS, backdrop=False, crop=True, vase=VASE_C
                 info += screen.note
             if wake == due or resized:
                 screen.convert(stage.cut(shown, at))
-            if rain:
-                rain.fall(screen, wake - began)
+            if extras:
+                extras.play(screen, wake - began, at)
             pane.paint(screen, wake - began, info)
             term.nap(wake)
             screen.draw()
@@ -1209,6 +1452,9 @@ def main():
                              "other colors and sizes (default %(default)s)")
     parser.add_argument("--no-sprinkles", action="store_true",
                         help="no white specks dripping down on the flowers")
+    parser.add_argument("--plain", action="store_true",
+                        help="no bursts, petals, hearts, butterflies or sheen: only "
+                             "the bouquet and the sprinkles")
     parser.add_argument("--no-crop", action="store_true",
                         help="show the whole frame, not just the subject on its black "
                              "backdrop")
@@ -1235,7 +1481,7 @@ def main():
     try:
         play(args.video, loop=not args.once, cols=args.cols, backdrop=args.bg,
              crop=not args.no_crop, vase=vase, flowers=args.flowers,
-             sprinkles=not args.no_sprinkles)
+             sprinkles=not args.no_sprinkles, plain=args.plain)
     except KeyboardInterrupt:
         pass
 
