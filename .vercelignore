@@ -1,0 +1,4 @@
+# The site is the public/ folder, as it is: nothing is built on Vercel.
+/*
+!/public
+!/vercel.json
