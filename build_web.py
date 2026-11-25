@@ -3,37 +3,6 @@
 # requires-python = ">=3.9"
 # dependencies = ["numpy", "opencv-python-headless"]
 # ///
-"""build_web.py - record one pass of ascii_player's show for the web page.
-
-    uv run build_web.py                      (demo_bloom.mp4 -> public/bloom.bin)
-    uv run build_web.py bloom.mp4 --cols 114 --rows 59 --fps 20 -o public/bloom.bin
-
-The page in public/ does no conversion of its own.  This script runs the very code
-that draws in the terminal (Stage, Renderer, Sprinkles and CodePane of
-ascii_player.py) on a screen of a fixed size, and writes down, for every frame, the
-cells that changed: which character, in which color, on which background.
-public/index.html plays that back on a canvas.  The show ends with the finished
-bouquet turning once; the page goes on with that turn for ever, so one more record
-follows the last frame: the cells that take the last frame back to the first of the
-turn.
-
-The file is gzip (the page unpacks it itself).  Unpacked, all numbers little-endian:
-
-    "FLW2"  uint32 n  n bytes of JSON  {"cols", "rows", "fps", "frames", "loop",
-                                        "glyphs", "papers"}
-            ("loop": the turn's first frame; "papers": the background colors)
-    then for every frame, and once more for the way back into the turn:
-        uint16 k                 how many cells changed
-        k steps                  which: each is this many cells after the one before
-                                 (the first: after cell -1), as one byte, or as 255
-                                 and then a uint16
-        k x uint8                their characters, as indexes into "glyphs"
-        k x uint16               their ink, 4 bits each of r g b: 0x0RGB
-        k x uint8                their backgrounds, as indexes into "papers"
-
-Ink in 16 levels per channel is all a glyph needs, and it keeps the file small: a cell
-whose color moved by less is not a change.
-"""
 import argparse
 import gzip
 import json
@@ -49,8 +18,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 class Page:
-    """Stands in for the terminal: it has a size, and nothing is written to it."""
-
     stop = fresh = False
 
     def __init__(self, cols, rows):
@@ -67,15 +34,12 @@ class Page:
 
 
 def record(path, cols, rows, fps):
-    """Play the show once, as play() does, but at `fps` frames per second and frame by
-    frame.  Yields how many frames the last turn has, then for every frame the
-    screen's three grids: characters, their ink, their backgrounds."""
     video = player.Reel(path)
     frame, film = video.first, video.film
     if frame is None:
         raise SystemExit(f"build_web: could not read any video frames from {path!r}")
     rate = film.get(cv2.CAP_PROP_FPS)
-    rate = rate if 0.0 < rate <= 240.0 else 30.0        # the film's own frame rate
+    rate = rate if 0.0 < rate <= 240.0 else 30.0
     total = max(int(film.get(cv2.CAP_PROP_FRAME_COUNT)), 0)
     white, lit, stem = player.survey(path)
     stage = player.Stage(frame.shape, white, lit, stem, length=total / rate)
@@ -101,13 +65,13 @@ def record(path, cols, rows, fps):
         info[3:3] = screen.note
         pane.paint(screen, at, info)
         screen.draw()
-        if index % max(round(fps / 4), 1) == 0:         # the counter moves at ~4 Hz
+        if index % max(round(fps / 4), 1) == 0:
             count = f"{screen.redrawn:4d} cells redrawn"
         ink = np.where(screen.glyph == player.SPACE, 0, screen.ink)
         yield screen.glyph.copy(), ink, screen.paper.copy()
         ok, following = video.read()
         if ok and following is not frame and stage.fit(following):
-            screen.layout(cols, rows, *stage.shape)     # the subject outgrew the crop
+            screen.layout(cols, rows, *stage.shape)
         frame, index = following, index + 1
 
 
@@ -127,12 +91,10 @@ def main():
     glyphs, papers, frames, changed = [ord(" ")], [0], [], 0
 
     def index(values, known):
-        """Each value's place in the list `known`, which grows by the new ones."""
         known.extend(set(values.tolist()) - set(known))
         return np.array([known.index(value) for value in values.tolist()], np.uint8)
 
     def change(was, now):
-        """The record that takes the screen from one state to another."""
         where = np.flatnonzero((now[0] != was[0]) | (now[1] != was[1])
                                | (now[2] != was[2]))
         glyph, ink, paper = (grid.ravel()[where] for grid in now)
@@ -145,14 +107,13 @@ def main():
 
     states = [(np.full((args.rows, args.cols), player.SPACE, np.uint32),
                np.zeros((args.rows, args.cols), np.uint32),
-               np.zeros((args.rows, args.cols), np.uint32))]    # a black, empty page
+               np.zeros((args.rows, args.cols), np.uint32))]
     for now in show:
-        # ink in 16 levels per channel, 0x0RGB
         r, g, b = (((now[1] >> shift & 255) * 15 + 127) // 255 for shift in (16, 8, 0))
         now = now[0], r << 8 | g << 4 | b, now[2]
         frames.append(change(states[-1], now))
         changed += struct.unpack_from("<H", frames[-1])[0]
-        states = states[-turn:] + [now]         # (the turn's first frame is kept)
+        states = states[-turn:] + [now]
     loop = max(len(frames) - turn, 0)
     back = change(states[-1], states[-turn] if 0 < turn < len(states) else states[-1])
     if len(glyphs) > 256 or len(papers) > 256:

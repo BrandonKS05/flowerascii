@@ -10,9 +10,9 @@
 <link rel="preload" href="bloom.bin" as="fetch" crossorigin>
 <style>
   :root {
-    --paper: #f0ebe1;                 /* the vase's off-white */
-    --petal: #ff4d94;                 /* the film's own flower */
-    --quiet: #969cb0;                 /* the editor pane's bar text */
+    --paper: #f0ebe1;
+    --petal: #ff4d94;
+    --quiet: #969cb0;
     --rule: #4b5263;
     --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "DejaVu Sans Mono",
             "Liberation Mono", monospace;
@@ -46,7 +46,7 @@
     letter-spacing: .32em;
     text-transform: uppercase;
     line-height: 1;
-    padding: .62em .7em .62em 1.02em;   /* the tracking adds .32em on the right */
+    padding: .62em .7em .62em 1.02em;
     color: var(--paper);
     background: #000;
     border: 3px solid var(--paper);
@@ -106,8 +106,6 @@
 
 <script>
 "use strict";
-// The show was recorded by build_web.py from the terminal player (ascii_player.py):
-// for every frame, the cells that changed.  This page only plays that back.
 const FONT = getComputedStyle(document.documentElement).getPropertyValue("--mono");
 const start = document.getElementById("start");
 const again = document.getElementById("again");
@@ -115,11 +113,11 @@ const canvas = document.getElementById("screen");
 const footer = document.querySelector("footer");
 const ctx = canvas.getContext("2d", { alpha: false });
 
-let show = null;                    // {cols, rows, fps, count, loop, glyphs, papers, frames}
-let glyph, ink, paper;              // what every cell shows now
-let cell = null;                    // how big a cell is, where each starts, the font
-let cursor = -1;                    // the frame that is on screen
-let clock = -1;                     // how many frames the show is old
+let show = null;
+let glyph, ink, paper;
+let cell = null;
+let cursor = -1;
+let clock = -1;
 let began = 0, hiddenAt = 0, timer = 0;
 
 async function load() {
@@ -134,13 +132,11 @@ async function load() {
   const head = JSON.parse(new TextDecoder().decode(bytes.subarray(8, 8 + size)));
   const frames = [];
   let at = 8 + size;
-  // one record per frame, and one more: the way from the last frame back to the
-  // first frame of the last turn, which then goes round for ever
   for (let f = 0; f <= head.frames; f++) {
     const k = view.getUint16(at, true);
     at += 2;
     const where = new Uint16Array(k);
-    for (let i = 0, spot = -1; i < k; i++) {    // each cell: so many after the last
+    for (let i = 0, spot = -1; i < k; i++) {
       let step = bytes[at++];
       if (step === 255) { step = view.getUint16(at, true); at += 2; }
       where[i] = spot += step;
@@ -151,16 +147,12 @@ async function load() {
                   paper: bytes.subarray(at + 3 * k, at + 4 * k) });
     at += 4 * k;
   }
-  // ink is 4 bits each of red, green and blue; backgrounds are a short list
   const inks = Array.from({ length: 4096 }, (_, c) =>
     `rgb(${(c >> 8) * 17},${(c >> 4 & 15) * 17},${(c & 15) * 17})`);
   const papers = head.papers.map(c => `rgb(${c >> 16},${c >> 8 & 255},${c & 255})`);
   return { ...head, count: head.frames, glyphs: Array.from(head.glyphs), inks, papers, frames };
 }
 
-// The canvas is as big as the window allows, and a cell is twice as tall as it is
-// wide: the picture was laid out for that.  Cells are a whole number of device pixels
-// wide where that costs little room; either way they start on whole pixels.
 function fit() {
   const ratio = window.devicePixelRatio || 1;
   const wide = (window.innerWidth - 24) * ratio;
@@ -185,13 +177,12 @@ function paint() {
   const { cols, rows, glyphs, inks, papers } = show, { w, xs, ys, font, base } = cell;
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // backgrounds (the editor pane), in runs of one color
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols;) {
       const back = paper[y * cols + x];
       let end = x + 1;
       while (end < cols && paper[y * cols + end] === back) end++;
-      if (back) {                               // (0 is black)
+      if (back) {
         ctx.fillStyle = papers[back];
         ctx.fillRect(xs[x], ys[y], xs[end] - xs[x], ys[y + 1] - ys[y]);
       }
@@ -203,18 +194,17 @@ function paint() {
   ctx.textBaseline = "alphabetic";
   let last = -1;
   for (let i = 0; i < cols * rows; i++) {
-    if (!glyph[i]) continue;                    // 0: a blank
+    if (!glyph[i]) continue;
     if (ink[i] !== last) ctx.fillStyle = inks[last = ink[i]];
     const column = i % cols, row = (i - column) / cols, c = glyphs[glyph[i]];
     const x = xs[column], y = ys[row], middle = (x + xs[column + 1]) / 2;
-    // three characters that fonts disagree about are drawn by hand
-    if (c === "●") {                            // a window button
+    if (c === "●") {
       ctx.beginPath();
       ctx.arc(middle, y + w, w * 0.42, 0, 2 * Math.PI);
       ctx.fill();
-    } else if (c === "▎") {                     // the current-line marker
+    } else if (c === "▎") {
       ctx.fillRect(x, y, Math.max(Math.round(w / 4), 1), ys[row + 1] - y);
-    } else if (c === "—") {                     // the dash in the title
+    } else if (c === "—") {
       ctx.fillRect(x, y + Math.round(w * 1.04), xs[column + 1] - x, Math.max(Math.round(font / 14), 1));
     } else {
       ctx.fillText(c, middle, y + base);
@@ -232,8 +222,6 @@ function apply(frame) {
   }
 }
 
-// One frame on: the next one, or - after the last - back to where the last turn
-// began, so that the finished bouquet goes on turning.
 function step() {
   if (cursor < show.count - 1) {
     apply(show.frames[++cursor]);
@@ -247,7 +235,7 @@ function tick(now) {
   const due = Math.floor((now - began) / 1000 * show.fps);
   let behind = due - clock;
   if (behind > 0) {
-    if (behind > 5 * show.fps) {                // a long sleep: do not race after it
+    if (behind > 5 * show.fps) {
       began += (behind - 1) / show.fps * 1000;
       behind = 1;
     }
@@ -256,7 +244,7 @@ function tick(now) {
     paint();
   }
   if (clock === show.count - 1 || (clock >= show.count && again.hidden)) {
-    again.hidden = false;                       // all have bloomed: offer to replay
+    again.hidden = false;
     requestAnimationFrame(() => again.classList.add("on"));
   }
   if (clock < show.count - 1 || show.loop < show.count) timer = requestAnimationFrame(tick);
@@ -280,7 +268,7 @@ function play() {
 }
 
 const ready = load();
-ready.catch(() => {});                          // (reported when Start is pressed)
+ready.catch(() => {});
 
 start.addEventListener("click", async () => {
   start.disabled = true;
@@ -302,7 +290,6 @@ start.addEventListener("click", async () => {
 
 again.addEventListener("click", play);
 window.addEventListener("resize", () => { if (show && !canvas.hidden) fit(); });
-// a hidden tab gets no frames: stop the clock there, so the show goes on where it was
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) hiddenAt = performance.now();
   else if (hiddenAt) { began += performance.now() - hiddenAt; hiddenAt = 0; }

@@ -3,6 +3,5 @@ __pycache__/
 .claude/
 .playwright-mcp/
 .DS_Store
-# screenshots of earlier versions
 frames/
 .vercel
