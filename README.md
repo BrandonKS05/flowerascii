@@ -5,9 +5,9 @@ and twelve flowers that grow out of it one after the other, each in its own colo
 size, while the whole bouquet turns. Each flower starts as a bud at the mouth of the
 vase and climbs on a leafy stem that gets longer while it opens; the bouquet takes
 half a minute to grow, until it stands three times as high as its vase. The sprinkles
-never stop, and they show only on the bouquet and just above it, not all over the
-black around it. Every character is picked from a video frame by `ascii_player.py`;
-beside the picture a fake editor pane scrolls through that file.
+never stop. They rain from the top of the picture on the vase and the flowers, and
+not into the black beside the bouquet. Every character is picked from a video frame
+by `ascii_player.py`; beside the picture a fake editor pane scrolls through that file.
 
 ## In the browser
 
@@ -74,13 +74,13 @@ the second number is how far that flower leans out, in degrees, and the third is
 size.
 
 `SPRINKLES` is how many specks are due each second on a picture 70 characters wide; a
-wider picture gets more in proportion. A speck shows only over the bouquet. It starts
-above the highest drawn character of its column, the share `ABOVE` of the picture's
-height above it, and one whose column is empty is left out. It runs down over drawn
-characters, at most the share `SOAK` of the picture's height of them, and soaks into
-the last with a glint; where the bouquet ends below it, it goes out. The specks come
-by a list that is as long as one turn of the bouquet and starts again with every turn,
-so the turn that the page repeats for ever shows no jump.
+wider picture gets more in proportion. A speck starts in the top row of the picture
+and falls straight down. One whose column has no drawn character in it is left out,
+so it rains on the bouquet and not beside it. On the bouquet a speck runs down over
+drawn characters, at most the share `SOAK` of the picture's height of them, and soaks
+into the next with a glint; where nothing drawn is left below it, it goes out. The
+specks come by a list that is as long as one turn of the bouquet and starts again with
+every turn, so the turn that the page repeats for ever shows no jump.
 
 ## Recording the show again
 

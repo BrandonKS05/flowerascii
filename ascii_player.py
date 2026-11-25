@@ -84,7 +84,6 @@ SPROUT = 1.8
 ENCORE = TURN
 MEMORY = 96
 SPRINKLES = 60.0
-ABOVE = 0.05
 SOAK = 0.2
 SPECKS = "'*+."
 TRAIL = ((ord(":"), 0xB4B4B4), (ord("."), 0x858585))
@@ -651,39 +650,34 @@ class Sprinkles:
             rng = random.Random(self.seed)
             self.cast = []
             for _ in range(round(SPRINKLES * w / TUNED * self.lap)):
-                speed = rng.uniform(0.15, 0.4)
+                speed = rng.uniform(0.35, 0.8)
                 self.cast.append((rng.random(), rng.randrange(w), rng.random(),
                                   h * speed, int(rng.random() * h * SOAK),
-                                  int(speed * 8.0 - 1.0)))
+                                  int(speed * 4.0 - 1.0)))
             self.due = np.array([drop[0] for drop in self.cast])
         past = 0.0 if self.then is None else min(max(now - self.then, 0.0), 0.1)
         self.then = now
         self.glint -= past / GLINT
         np.maximum(self.glint, 0.0, out=self.glint)
         lit, falling = screen.shown != SPACE, []
-        reach = max(round(ABOVE * h), 1)
-        count = np.cumsum(lit, axis=0)
-        ahead = np.vstack((count[reach:], np.repeat(count[-1:], min(reach, h), axis=0)))
-        near = ahead - count + lit > 0
+        over = np.cumsum(lit[::-1], axis=0)[::-1] > 0
         laps = np.floor(now / self.lap - self.due)
         for i in np.flatnonzero(laps > np.floor((now - past) / self.lap - self.due)):
-            drop = list(self.cast[i][1:])
-            if near[:, drop[0]].any():
-                drop[1] += int(near[:, drop[0]].argmax())
-                self.drops.append(drop)
+            if over[0, self.cast[i][1]]:
+                self.drops.append(list(self.cast[i][1:]))
         for drop in self.drops:
             x, y, speed, deep = drop[:4]
-            y, above = y + speed * past, int(y // 1)
-            for row in range(above + 1, min(int(y // 1), h - 1) + 1):
+            y, above = y + speed * past, int(y)
+            for row in range(above + 1, min(int(y), h - 1) + 1):
                 if lit[row, x]:
                     if not deep:
                         self.glint[row, x] = 1.0
                         break
                     deep -= 1
-                elif not near[row, x]:
+                elif not over[row, x]:
                     break
             else:
-                if y < 0.0 or y < h and near[int(y), x]:
+                if y < h and over[int(y), x]:
                     drop[1], drop[3] = y, deep
                     falling.append(drop)
         self.drops = falling
@@ -695,12 +689,11 @@ class Sprinkles:
             ink[ys, xs] = r << 16 | g << 8 | b
         for x, y, _, _, trail in self.drops:
             for back, (mark, gray) in enumerate(TRAIL[:trail], 1):
-                if y >= back and near[int(y) - back, x] and not lit[int(y) - back, x]:
+                if y >= back and not lit[int(y) - back, x]:
                     glyph[int(y) - back, x], ink[int(y) - back, x] = mark, gray
         for x, y, _, _, _ in self.drops:
-            if y >= 0.0:
-                glyph[int(y), x] = SPECK[int(y % 1.0 * len(SPECK))]
-                ink[int(y), x] = 0xFFFFFF
+            glyph[int(y), x] = SPECK[int(y % 1.0 * len(SPECK))]
+            ink[int(y), x] = 0xFFFFFF
 
 
 def clock(seconds):
